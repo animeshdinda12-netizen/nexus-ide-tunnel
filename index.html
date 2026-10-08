@@ -2546,6 +2546,7 @@ function writeRevokedToIdb(ids) {
 
 /* ── BOOT ──────────────────────────────────────────────────────────────── */
 (function boot() {
+  window.__NEXUS_BOOTED__ = true;
   const mount = document.getElementById('root');
   const fatal = (title, detail, hint) => {
     if (!mount) return;
@@ -2589,6 +2590,3231 @@ function writeRevokedToIdb(ids) {
   }
 })();
 
+</script>
+<script id="nexus-compiled" type="text/plain">
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUS IDE — CORE RUNTIME
+   Storage, templates, document assembly, UI atoms, error traps, SW bridge.
+   ═══════════════════════════════════════════════════════════════════════════ */
+const {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+  useContext,
+  createContext,
+  useReducer
+} = React;
+
+/* ── 1 · ICON BRIDGE ───────────────────────────────────────────────────────
+   Primary: lucide-react UMD (React components).
+   Fallback: vanilla `lucide.icons` raw node data rendered to inline SVG.
+   Terminal fallback: a neutral glyph so the chrome never collapses.          */
+const KEBAB = s => String(s).replace(/([a-z0-9])([A-Z])/g, '$1-$2').replace(/([A-Z])([A-Z][a-z])/g, '$1-$2').toLowerCase();
+const SVG_ATTRS = {
+  'stroke-width': 'strokeWidth',
+  'stroke-linecap': 'strokeLinecap',
+  'stroke-linejoin': 'strokeLinejoin',
+  'fill-rule': 'fillRule',
+  'clip-rule': 'clipRule',
+  'stroke-dasharray': 'strokeDasharray'
+};
+function rawNodeToSvg(node, size, className, strokeWidth) {
+  const list = Array.isArray(node) ? node : [];
+  const kids = [];
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (!Array.isArray(item) || !item[0]) continue;
+    const props = {
+      key: 'k' + i
+    };
+    const attrs = item[1] || {};
+    for (const k in attrs) props[SVG_ATTRS[k] || k] = attrs[k];
+    kids.push(React.createElement(item[0], props));
+  }
+  return /*#__PURE__*/_jsx("svg", {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: strokeWidth,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    className: className,
+    "aria-hidden": "true",
+    children: kids
+  });
+}
+function Icon({
+  name,
+  size = 16,
+  className = '',
+  strokeWidth = 2
+}) {
+  const LR = typeof window !== 'undefined' ? window.LucideReact : null;
+  if (LR && typeof LR[name] === 'function') {
+    const Cmp = LR[name];
+    return /*#__PURE__*/_jsx(Cmp, {
+      size: size,
+      className: className,
+      strokeWidth: strokeWidth
+    });
+  }
+  const vanilla = typeof window !== 'undefined' && window.lucide && window.lucide.icons ? window.lucide.icons : null;
+  if (vanilla) {
+    const node = vanilla[KEBAB(name)] || vanilla[name];
+    if (node) return rawNodeToSvg(node, size, className, strokeWidth);
+  }
+  return /*#__PURE__*/_jsx("svg", {
+    xmlns: "http://www.w3.org/2000/svg",
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: strokeWidth,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    className: className,
+    "aria-hidden": "true",
+    children: /*#__PURE__*/_jsx("circle", {
+      cx: "12",
+      cy: "12",
+      r: "9"
+    })
+  });
+}
+
+/* ── 2 · CONSTANTS ─────────────────────────────────────────────────────── */
+const APP = {
+  name: 'NEXUS IDE',
+  tagline: 'Backendless Studio · Browser Tunnel',
+  version: '1.0.0',
+  ttl: 900000,
+  // 15 minutes — tunnel lifetime
+  urlBudget: 32000 // soft ceiling before we warn about URL length
+};
+const K_PROJECTS = 'nexus.ide.projects.v1';
+const K_PREFS = 'nexus.ide.prefs.v1';
+const K_TUNNELS = 'nexus.ide.tunnels.v1';
+const K_REVOKED = 'nexus.ide.revoked.v1';
+
+/* ── 3 · UTILITIES ─────────────────────────────────────────────────────── */
+function uid(prefix) {
+  const rnd = typeof crypto !== 'undefined' && crypto.getRandomValues ? Array.from(crypto.getRandomValues(new Uint8Array(6))).map(b => b.toString(16).padStart(2, '0')).join('') : Math.random().toString(36).slice(2, 14);
+  return (prefix || 'id') + '_' + Date.now().toString(36) + '_' + rnd;
+}
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try {
+    return new Date(ts).toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  } catch (e) {
+    return '—';
+  }
+}
+function fmtRelative(ts) {
+  if (!ts) return 'never';
+  const d = Date.now() - ts;
+  if (d < 60000) return 'just now';
+  if (d < 3600000) return Math.floor(d / 60000) + 'm ago';
+  if (d < 86400000) return Math.floor(d / 3600000) + 'h ago';
+  if (d < 2592000000) return Math.floor(d / 86400000) + 'd ago';
+  return fmtDate(ts);
+}
+function fmtClock(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+}
+function bytesFmt(n) {
+  const b = Number(n) || 0;
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(2) + ' MB';
+}
+function safeFileName(name, fallback) {
+  const base = String(name || '').trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return (base || fallback || 'nexus-project').slice(0, 64);
+}
+function lineCount(text) {
+  if (!text) return 0;
+  return text.split('\n').length;
+}
+
+/** Debounce a value — used to keep the live preview from thrashing on keystrokes. */
+function useDebounced(value, delay) {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), delay);
+    return () => clearTimeout(t);
+  }, [value, delay]);
+  return debounced;
+}
+
+/* ── 4 · STORAGE LAYER (quota-safe) ────────────────────────────────────── */
+const Storage = {
+  available: true,
+  reason: '',
+  probe() {
+    try {
+      const k = '__nx_probe__';
+      window.localStorage.setItem(k, '1');
+      window.localStorage.removeItem(k);
+      this.available = true;
+      this.reason = '';
+    } catch (e) {
+      this.available = false;
+      this.reason = e && e.name === 'SecurityError' ? 'LocalStorage is blocked in this context (private mode or third-party cookie policy). Projects will live in memory only.' : 'LocalStorage is unavailable: ' + String(e && e.message || e);
+    }
+    return this.available;
+  },
+  read(key, fallback) {
+    if (!this.available) return fallback;
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw === null || raw === undefined) return fallback;
+      return JSON.parse(raw);
+    } catch (e) {
+      console.warn('[NEXUS] storage read failed for', key, e);
+      return fallback;
+    }
+  },
+  write(key, value) {
+    if (!this.available) return {
+      ok: false,
+      error: 'unavailable',
+      message: this.reason
+    };
+    try {
+      window.localStorage.setItem(key, JSON.stringify(value));
+      return {
+        ok: true
+      };
+    } catch (e) {
+      const name = e && e.name;
+      const quota = name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED' || e && e.code === 22;
+      return {
+        ok: false,
+        error: quota ? 'quota' : 'unknown',
+        message: quota ? 'LocalStorage quota exceeded. Delete an unused project or trim a large file, then try again.' : String(e && e.message || e)
+      };
+    }
+  },
+  remove(key) {
+    try {
+      window.localStorage.removeItem(key);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+};
+
+/* ── 5 · STARTER TEMPLATES ─────────────────────────────────────────────── */
+const STARTER_SINGLE = ['<!DOCTYPE html>', '<html lang="en">', '<head>', '  <meta charset="utf-8" />', '  <meta name="viewport" content="width=device-width, initial-scale=1" />', '  <title>NEXUS · Single-File Starter</title>', '  <style>', '    :root { color-scheme: dark; }', '    * { box-sizing: border-box; }', '    body {', '      margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;', '      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e2e8f0;', '      background: radial-gradient(1100px 560px at 50% -12%, #0e7490 0%, #020617 58%, #020617 100%);', '    }', '    .card {', '      width: min(600px, 94vw); padding: 34px; border-radius: 22px;', '      background: rgba(15, 23, 42, .74); border: 1px solid rgba(148, 163, 184, .18);', '      backdrop-filter: blur(14px); box-shadow: 0 34px 90px -34px rgba(34, 211, 238, .5);', '    }', '    h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: -.02em; }', '    p { margin: 0 0 20px; color: #94a3b8; font-size: 14px; line-height: 1.65; }', '    code { background: rgba(34,211,238,.12); color: #67e8f9; padding: 2px 6px; border-radius: 6px; font-size: 12.5px; }', '    button {', '      border: 0; cursor: pointer; padding: 12px 20px; border-radius: 12px; font-weight: 600; font-size: 14px;', '      color: #04212b; background: linear-gradient(135deg, #22d3ee, #34d399);', '      box-shadow: 0 14px 34px -14px rgba(34, 211, 238, .8); transition: transform .16s ease, box-shadow .16s ease;', '    }', '    button:hover { transform: translateY(-2px); box-shadow: 0 20px 44px -16px rgba(34, 211, 238, .9); }', '    pre { margin: 20px 0 0; padding: 16px; border-radius: 12px; background: rgba(2,6,23,.72);', '          border: 1px solid rgba(148,163,184,.14); font-size: 12.5px; color: #a5f3fc; white-space: pre-wrap; }', '  </style>', '</head>', '<body>', '  <main class="card">', '    <h1>🚀 Single-File Starter</h1>', '    <p>', '      This is a <strong>unified HTML document</strong>. Edit it in the editor, hit <code>Save</code>, then press', '      <strong>Spin Up Tunnel Server</strong> to serve it as a real top-level document — zero iframes, full WebRTC,', '      PeerJS and hardware-permission support.', '    </p>', '    <button id="probe">Run capability self-test</button>', '    <pre id="out">Press the button…</pre>', '  </main>', '', '  <script>', '    var out = document.getElementById("out");', '    document.getElementById("probe").addEventListener("click", function () {', '      var lines = [', '        "top-level document : " + (window.top === window.self),', '        "origin             : " + location.origin,', '        "secure context     : " + window.isSecureContext,', '        "RTCPeerConnection  : " + (typeof RTCPeerConnection === "function"),', '        "getUserMedia       : " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),', '        "serviceWorker      : " + ("serviceWorker" in navigator),', '        "localStorage       : " + (function () { try { localStorage.setItem("_t","1"); localStorage.removeItem("_t"); return true; } catch (e) { return false; } })()', '      ];', '      out.textContent = lines.join("\\n");', '    });', '  <\/script>', '</body>', '</html>'].join('\n');
+const STARTER_SPLIT_HTML = ['<!DOCTYPE html>', '<html lang="en">', '<head>', '  <meta charset="utf-8" />', '  <meta name="viewport" content="width=device-width, initial-scale=1" />', '  <title>NEXUS · Split Starter</title>', '  <link rel="stylesheet" href="style.css" />', '</head>', '<body>', '  <main class="shell">', '    <span class="tag">multi-file build</span>', '    <h1>Split Component Starter</h1>', '    <p>', '      HTML, CSS and JS live in three independent panes. The tunnel compiles them into one', '      portable document on the fly.', '    </p>', '    <div class="row">', '      <button id="ping" class="btn">Ping runtime</button>', '      <span id="clock" class="clock">--:--:--</span>', '    </div>', '    <pre id="log" class="log">awaiting input…</pre>', '  </main>', '  <script src="script.js"><\/script>', '</body>', '</html>'].join('\n');
+const STARTER_SPLIT_CSS = [':root { color-scheme: dark; }', '* { box-sizing: border-box; }', 'body {', '  margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px;', '  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; color: #e2e8f0;', '  background: radial-gradient(1000px 520px at 50% -10%, #4c1d95 0%, #020617 60%, #020617 100%);', '}', '.shell {', '  width: min(620px, 94vw); padding: 34px; border-radius: 22px;', '  background: rgba(15, 23, 42, .74); border: 1px solid rgba(148, 163, 184, .18);', '  backdrop-filter: blur(14px); box-shadow: 0 34px 90px -34px rgba(139, 92, 246, .55);', '}', '.tag {', '  display: inline-block; margin-bottom: 14px; padding: 5px 11px; border-radius: 999px;', '  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;', '  color: #c4b5fd; background: rgba(139, 92, 246, .16); border: 1px solid rgba(139, 92, 246, .34);', '}', 'h1 { margin: 0 0 8px; font-size: 27px; letter-spacing: -.02em; }', 'p { margin: 0 0 20px; color: #94a3b8; font-size: 14px; line-height: 1.65; }', '.row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }', '.btn {', '  border: 0; cursor: pointer; padding: 12px 20px; border-radius: 12px; font-weight: 600; font-size: 14px;', '  color: #1e1b4b; background: linear-gradient(135deg, #a78bfa, #22d3ee);', '  box-shadow: 0 14px 34px -14px rgba(167, 139, 250, .85); transition: transform .16s ease;', '}', '.btn:hover { transform: translateY(-2px); }', '.clock { font-variant-numeric: tabular-nums; font-size: 13px; color: #7dd3fc; letter-spacing: .08em; }', '.log {', '  margin: 20px 0 0; padding: 16px; border-radius: 12px; background: rgba(2, 6, 23, .72);', '  border: 1px solid rgba(148, 163, 184, .14); font-size: 12.5px; color: #a5b4fc; white-space: pre-wrap;', '}'].join('\n');
+const STARTER_SPLIT_JS = ['/* Split starter — demonstrates runtime capability probing. */', 'var logEl = document.getElementById("log");', 'var clockEl = document.getElementById("clock");', '', 'function stamp() {', '  return new Date().toLocaleTimeString();', '}', '', 'function write(lines) {', '  logEl.textContent = lines.join("\\n");', '}', '', 'document.getElementById("ping").addEventListener("click", function () {', '  write([', '    "[" + stamp() + "] runtime reachable",', '    "top-level document : " + (window.top === window.self),', '    "origin             : " + location.origin,', '    "secure context     : " + window.isSecureContext,', '    "RTCPeerConnection  : " + (typeof RTCPeerConnection === "function"),', '    "getUserMedia       : " + !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),', '    "mediaDevices count : " + (navigator.mediaDevices ? Object.keys(navigator.mediaDevices).length : 0)', '  ]);', '});', '', 'setInterval(function () {', '  clockEl.textContent = stamp();', '}, 1000);', 'clockEl.textContent = stamp();'].join('\n');
+
+/* ── 6 · PROJECT MODEL & DOCUMENT ASSEMBLY ─────────────────────────────── */
+
+/**
+ * Merge the three panes into one portable document.
+ * CSS is injected before the closing </head>, JS before </body>.
+ * Falls back to prepending / appending when the shell has no closing tags.
+ */
+function assembleDocument(html, css, js) {
+  let doc = typeof html === 'string' ? html : '';
+  const cssBlock = typeof css === 'string' && css.trim() ? '\n<style data-nexus="css">\n' + css + '\n<\/style>\n' : '';
+  const jsBlock = typeof js === 'string' && js.trim() ? '\n<script data-nexus="js">\n' + js + '\n<\/script>\n' : '';
+  if (cssBlock) {
+    if (/<\/head>/i.test(doc)) doc = doc.replace(/<\/head>/i, cssBlock + '</head>');else doc = cssBlock + doc;
+  }
+  if (jsBlock) {
+    if (/<\/body>/i.test(doc)) doc = doc.replace(/<\/body>/i, jsBlock + '</body>');else doc = doc + jsBlock;
+  }
+  return doc;
+}
+
+/** Produce the exact string that ships through the tunnel / download / preview. */
+function buildDocument(project) {
+  if (!project || !project.files) return '';
+  const f = project.files;
+  if (project.type === 'single') return f.html || '';
+  return assembleDocument(f.html || '', f.css || '', f.js || '');
+}
+
+/** Assign an imported file to the correct pane (and fold into HTML for unified projects). */
+function ingestFile(project, fileName, text) {
+  const ext = String(fileName || '').split('.').pop().toLowerCase();
+  let html = project.files.html || '';
+  let css = project.files.css || '';
+  let js = project.files.js || '';
+  if (ext === 'html' || ext === 'htm') html = text;else if (ext === 'css') css = text;else if (ext === 'js' || ext === 'mjs' || ext === 'cjs') js = text;else html = text;
+  if (project.type === 'single') {
+    return {
+      ...project,
+      files: {
+        html: assembleDocument(html, css, js),
+        css: '',
+        js: ''
+      }
+    };
+  }
+  return {
+    ...project,
+    files: {
+      html,
+      css,
+      js
+    }
+  };
+}
+function makeProject(name, type, seed) {
+  const s = seed || {};
+  const now = Date.now();
+  const isSingle = type === 'single';
+  return {
+    id: uid('prj'),
+    name: name && name.trim() || 'Untitled Project',
+    type: isSingle ? 'single' : 'split',
+    createdAt: now,
+    updatedAt: now,
+    files: isSingle ? {
+      html: typeof s.html === 'string' ? s.html : STARTER_SINGLE,
+      css: '',
+      js: ''
+    } : {
+      html: typeof s.html === 'string' ? s.html : STARTER_SPLIT_HTML,
+      css: typeof s.css === 'string' ? s.css : STARTER_SPLIT_CSS,
+      js: typeof s.js === 'string' ? s.js : STARTER_SPLIT_JS
+    }
+  };
+}
+const BLANK_SHELL = ['<!DOCTYPE html>', '<html lang="en">', '<head>', '  <meta charset="utf-8" />', '  <meta name="viewport" content="width=device-width, initial-scale=1" />', '  <title>Blank Canvas</title>', '</head>', '<body>', '  <h1>Blank canvas</h1>', '</body>', '</html>'].join('\n');
+
+/* ── 7 · DOWNLOAD HELPERS ──────────────────────────────────────────────── */
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+function downloadProject(project) {
+  const doc = buildDocument(project);
+  const base = safeFileName(project.name, 'nexus-project');
+  if (project.type === 'single') {
+    triggerDownload(new Blob([doc], {
+      type: 'text/html;charset=utf-8'
+    }), base + '.html');
+    return {
+      kind: 'html',
+      filename: base + '.html'
+    };
+  }
+  if (typeof window.JSZip === 'undefined') {
+    triggerDownload(new Blob([doc], {
+      type: 'text/html;charset=utf-8'
+    }), base + '-bundled.html');
+    return {
+      kind: 'html-fallback',
+      filename: base + '-bundled.html'
+    };
+  }
+  const zip = new window.JSZip();
+  const root = zip.folder(base);
+  root.file('index.html', project.files.html || '');
+  root.file('style.css', project.files.css || '');
+  root.file('script.js', project.files.js || '');
+  root.folder('dist').file('index.html', doc);
+  root.file('README.txt', APP.name + ' ' + APP.version + '\n' + 'Project: ' + project.name + '\n' + 'Type: Multi-file Split\n' + 'Exported: ' + new Date().toISOString() + '\n\n' + 'index.html  → markup pane\n' + 'style.css   → stylesheet pane\n' + 'script.js   → behaviour pane\n' + 'dist/index.html → the three panes compiled into one portable document\n');
+  zip.generateAsync({
+    type: 'blob',
+    compression: 'DEFLATE',
+    compressionOptions: {
+      level: 9
+    }
+  }).then(blob => triggerDownload(blob, base + '.zip')).catch(err => {
+    console.warn('[NEXUS] zip failed, falling back to bundled html', err);
+    triggerDownload(new Blob([doc], {
+      type: 'text/html;charset=utf-8'
+    }), base + '-bundled.html');
+  });
+  return {
+    kind: 'zip',
+    filename: base + '.zip'
+  };
+}
+
+/* ── 8 · SERVICE WORKER BRIDGE ─────────────────────────────────────────── */
+const SWBridge = {
+  supported: typeof navigator !== 'undefined' && 'serviceWorker' in navigator,
+  secure: typeof window !== 'undefined' ? window.isSecureContext : false,
+  registration: null,
+  error: '',
+  state: 'unsupported',
+  swUrl() {
+    return new URL('sw.js', window.location.href).href;
+  },
+  scopeUrl() {
+    return new URL('./', window.location.href).href;
+  },
+  async register() {
+    if (!this.supported) {
+      this.state = this.secure ? 'unsupported' : 'insecure';
+      this.error = this.secure ? 'This browser does not expose the Service Worker API.' : 'Service Workers require a secure context (https:// or localhost). The tunnel link still works — preview.html decodes the payload client-side.';
+      return null;
+    }
+    try {
+      const reg = await navigator.serviceWorker.register(this.swUrl(), {
+        scope: this.scopeUrl(),
+        updateViaCache: 'none'
+      });
+      this.registration = reg;
+      this.state = 'registered';
+      await Promise.race([navigator.serviceWorker.ready, new Promise(r => setTimeout(r, 4000))]);
+      this.state = navigator.serviceWorker.controller ? 'controlling' : 'active';
+      this.error = '';
+      return reg;
+    } catch (e) {
+      this.state = 'failed';
+      this.error = String(e && e.message || e);
+      console.warn('[NEXUS] service worker registration failed', e);
+      return null;
+    }
+  },
+  worker() {
+    if (typeof navigator === 'undefined' || !this.supported) return null;
+    return navigator.serviceWorker.controller || this.registration && (this.registration.active || this.registration.waiting || this.registration.installing) || null;
+  },
+  post(message) {
+    const w = this.worker();
+    if (!w) return false;
+    try {
+      w.postMessage(message);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+};
+
+/* ── 9 · TUNNEL PAYLOAD ENGINE ─────────────────────────────────────────── */
+
+/**
+ * Pack the project into a compressed, self-expiring URL payload.
+ * The payload is a JSON envelope compressed with lz-string's
+ * compressToEncodedURIComponent (URL-safe, base64-ish alphabet).
+ */
+function buildTunnel(project) {
+  const doc = buildDocument(project);
+  const id = uid('tun');
+  const exp = Date.now() + APP.ttl;
+  const envelope = {
+    v: 1,
+    id: id,
+    n: project.name,
+    t: project.type,
+    e: exp,
+    h: doc
+  };
+  if (typeof window.LZString === 'undefined') {
+    return {
+      ok: false,
+      error: 'LZString is not loaded. Check your network connection to the CDN and reload.'
+    };
+  }
+  let payload;
+  try {
+    payload = window.LZString.compressToEncodedURIComponent(JSON.stringify(envelope));
+  } catch (e) {
+    return {
+      ok: false,
+      error: 'Compression failed: ' + String(e && e.message || e)
+    };
+  }
+  if (!payload) return {
+    ok: false,
+    error: 'Compression produced an empty payload.'
+  };
+  const base = new URL('preview.html', window.location.href).href;
+  const url = base + '?t=' + payload + '&e=' + exp + '&id=' + encodeURIComponent(id);
+  return {
+    ok: true,
+    id: id,
+    exp: exp,
+    url: url,
+    docBytes: doc.length,
+    payloadChars: payload.length,
+    urlLength: url.length,
+    ratio: doc.length ? Math.max(1, Math.round((1 - payload.length / doc.length) * 100)) : 0,
+    oversized: url.length > APP.urlBudget
+  };
+}
+
+/* ── 10 · CLIPBOARD ────────────────────────────────────────────────────── */
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) {/* fall through to the legacy path */}
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', 'readonly');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+/* ── 11 · UI ATOMS ─────────────────────────────────────────────────────── */
+const cx = (...parts) => parts.filter(Boolean).join(' ');
+function Button({
+  children,
+  icon,
+  variant = 'ghost',
+  size = 'md',
+  className = '',
+  ...rest
+}) {
+  const base = 'inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-all duration-200 ' + 'focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60 disabled:opacity-40 disabled:cursor-not-allowed ' + 'disabled:hover:transform-none select-none active:scale-[.97]';
+  const sizes = {
+    xs: 'text-[11px] px-2.5 py-1.5',
+    sm: 'text-xs px-3 py-2',
+    md: 'text-sm px-4 py-2.5',
+    lg: 'text-sm px-5 py-3'
+  };
+  const variants = {
+    primary: 'text-slate-950 bg-gradient-to-br from-cyan-400 to-emerald-400 shadow-lg shadow-cyan-500/25 hover:shadow-cyan-400/40 hover:-translate-y-px',
+    violet: 'text-white bg-gradient-to-br from-violet-500 to-fuchsia-500 shadow-lg shadow-violet-500/25 hover:shadow-violet-400/40 hover:-translate-y-px',
+    danger: 'text-rose-200 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 hover:border-rose-400/50',
+    ghost: 'text-slate-300 bg-slate-800/50 border border-slate-700/60 hover:bg-slate-700/60 hover:text-white hover:border-slate-600',
+    subtle: 'text-slate-400 hover:text-cyan-300 hover:bg-slate-800/60',
+    outline: 'text-cyan-300 border border-cyan-500/40 bg-cyan-500/5 hover:bg-cyan-500/15 hover:border-cyan-400/70'
+  };
+  return /*#__PURE__*/_jsxs("button", {
+    className: cx(base, sizes[size] || sizes.md, variants[variant] || variants.ghost, className),
+    ...rest,
+    children: [icon ? /*#__PURE__*/_jsx(Icon, {
+      name: icon,
+      size: size === 'xs' ? 12 : size === 'sm' ? 14 : 16
+    }) : null, children]
+  });
+}
+function Badge({
+  children,
+  tone = 'slate',
+  icon,
+  className = ''
+}) {
+  const tones = {
+    slate: 'text-slate-300 bg-slate-800/70 border-slate-700/70',
+    cyan: 'text-cyan-300 bg-cyan-500/10 border-cyan-500/30',
+    violet: 'text-violet-300 bg-violet-500/10 border-violet-500/30',
+    emerald: 'text-emerald-300 bg-emerald-500/10 border-emerald-500/30',
+    amber: 'text-amber-300 bg-amber-500/10 border-amber-500/30',
+    rose: 'text-rose-300 bg-rose-500/10 border-rose-500/30'
+  };
+  return /*#__PURE__*/_jsxs("span", {
+    className: cx('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold tracking-wide', tones[tone] || tones.slate, className),
+    children: [icon ? /*#__PURE__*/_jsx(Icon, {
+      name: icon,
+      size: 11
+    }) : null, children]
+  });
+}
+function Modal({
+  open,
+  onClose,
+  children,
+  size = 'md',
+  labelledBy
+}) {
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = e => {
+      if (e.key === 'Escape') onClose && onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  if (!open) return null;
+  const widths = {
+    sm: 'max-w-md',
+    md: 'max-w-2xl',
+    lg: 'max-w-4xl'
+  };
+  return /*#__PURE__*/_jsxs("div", {
+    className: "fixed inset-0 z-[80] flex items-center justify-center p-4 animate-fade-in",
+    role: "dialog",
+    "aria-modal": "true",
+    "aria-labelledby": labelledBy,
+    children: [/*#__PURE__*/_jsx("div", {
+      className: "absolute inset-0 bg-slate-950/80 backdrop-blur-md",
+      onClick: onClose
+    }), /*#__PURE__*/_jsx("div", {
+      className: cx('relative w-full rounded-2xl border border-slate-800/70 bg-slate-900/85 backdrop-blur-xl', 'shadow-2xl shadow-black/60 animate-pop-in max-h-[92vh] overflow-hidden flex flex-col', widths[size] || widths.md),
+      children: children
+    })]
+  });
+}
+function ModalHeader({
+  icon,
+  title,
+  subtitle,
+  onClose,
+  tone = 'cyan'
+}) {
+  const tones = {
+    cyan: 'from-cyan-500/20 text-cyan-300',
+    violet: 'from-violet-500/20 text-violet-300',
+    emerald: 'from-emerald-500/20 text-emerald-300',
+    rose: 'from-rose-500/20 text-rose-300'
+  };
+  return /*#__PURE__*/_jsxs("div", {
+    className: cx('flex items-start gap-4 border-b border-slate-800/70 bg-gradient-to-r to-transparent px-6 py-5', tones[tone] || tones.cyan),
+    children: [/*#__PURE__*/_jsx("div", {
+      className: "mt-0.5 grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-700/60 bg-slate-950/60",
+      children: /*#__PURE__*/_jsx(Icon, {
+        name: icon,
+        size: 18
+      })
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "min-w-0 flex-1",
+      children: [/*#__PURE__*/_jsx("h2", {
+        className: "truncate text-base font-bold text-white",
+        children: title
+      }), subtitle ? /*#__PURE__*/_jsx("p", {
+        className: "mt-0.5 text-xs text-slate-400",
+        children: subtitle
+      }) : null]
+    }), onClose ? /*#__PURE__*/_jsx("button", {
+      onClick: onClose,
+      "aria-label": "Close dialog",
+      className: "rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-800/70 hover:text-white",
+      children: /*#__PURE__*/_jsx(Icon, {
+        name: "X",
+        size: 16
+      })
+    }) : null]
+  });
+}
+function ConfirmDialog({
+  state,
+  onCancel,
+  onConfirm
+}) {
+  return /*#__PURE__*/_jsx(Modal, {
+    open: !!state,
+    onClose: onCancel,
+    size: "sm",
+    children: state ? /*#__PURE__*/_jsxs(_Fragment, {
+      children: [/*#__PURE__*/_jsx(ModalHeader, {
+        icon: state.icon || 'AlertTriangle',
+        title: state.title,
+        subtitle: state.subtitle,
+        tone: state.tone || 'rose'
+      }), /*#__PURE__*/_jsx("div", {
+        className: "px-6 py-5 text-sm text-slate-300",
+        children: state.body
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "flex justify-end gap-2 border-t border-slate-800/70 bg-slate-950/40 px-6 py-4",
+        children: [/*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          onClick: onCancel,
+          children: "Cancel"
+        }), /*#__PURE__*/_jsx(Button, {
+          variant: state.tone === 'rose' ? 'danger' : 'primary',
+          size: "sm",
+          icon: state.icon || 'Check',
+          onClick: () => {
+            onConfirm();
+          },
+          children: state.confirmLabel || 'Confirm'
+        })]
+      })]
+    }) : null
+  });
+}
+function ToastHost({
+  toasts,
+  dismiss
+}) {
+  const tones = {
+    info: {
+      ring: 'border-cyan-500/40',
+      icon: 'Info',
+      text: 'text-cyan-300'
+    },
+    success: {
+      ring: 'border-emerald-500/40',
+      icon: 'CheckCircle2',
+      text: 'text-emerald-300'
+    },
+    warn: {
+      ring: 'border-amber-500/40',
+      icon: 'AlertTriangle',
+      text: 'text-amber-300'
+    },
+    error: {
+      ring: 'border-rose-500/40',
+      icon: 'XCircle',
+      text: 'text-rose-300'
+    }
+  };
+  return /*#__PURE__*/_jsx("div", {
+    className: "pointer-events-none fixed bottom-5 right-5 z-[100] flex w-[min(92vw,380px)] flex-col gap-2",
+    children: toasts.map(t => {
+      const tone = tones[t.tone] || tones.info;
+      return /*#__PURE__*/_jsxs("div", {
+        className: cx('pointer-events-auto flex items-start gap-3 rounded-xl border bg-slate-900/90 px-4 py-3 shadow-xl shadow-black/50 backdrop-blur-md animate-slide-up', tone.ring),
+        children: [/*#__PURE__*/_jsx(Icon, {
+          name: tone.icon,
+          size: 16,
+          className: cx('mt-0.5 shrink-0', tone.text)
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "min-w-0 flex-1",
+          children: [t.title ? /*#__PURE__*/_jsx("div", {
+            className: "text-xs font-bold text-white",
+            children: t.title
+          }) : null, /*#__PURE__*/_jsx("div", {
+            className: "break-words text-xs leading-relaxed text-slate-300",
+            children: t.message
+          })]
+        }), /*#__PURE__*/_jsx("button", {
+          onClick: () => dismiss(t.id),
+          "aria-label": "Dismiss",
+          className: "rounded p-1 text-slate-500 transition-colors hover:bg-slate-800 hover:text-white",
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: "X",
+            size: 12
+          })
+        })]
+      }, t.id);
+    })
+  });
+}
+function Field({
+  label,
+  hint,
+  error,
+  children,
+  icon
+}) {
+  return /*#__PURE__*/_jsxs("label", {
+    className: "block",
+    children: [/*#__PURE__*/_jsxs("span", {
+      className: "mb-2 flex items-center gap-2 text-[11px] font-bold uppercase tracking-[.14em] text-slate-400",
+      children: [icon ? /*#__PURE__*/_jsx(Icon, {
+        name: icon,
+        size: 12
+      }) : null, label]
+    }), children, error ? /*#__PURE__*/_jsxs("span", {
+      className: "mt-2 flex items-center gap-1.5 text-xs text-rose-300",
+      children: [/*#__PURE__*/_jsx(Icon, {
+        name: "AlertCircle",
+        size: 12
+      }), error]
+    }) : hint ? /*#__PURE__*/_jsx("span", {
+      className: "mt-2 block text-xs text-slate-500",
+      children: hint
+    }) : null]
+  });
+}
+const inputClass = 'w-full rounded-xl border border-slate-700/70 bg-slate-950/70 px-4 py-3 text-sm text-slate-100 ' + 'placeholder-slate-500 transition-all duration-200 focus:border-cyan-500/70 focus:bg-slate-950 ' + 'focus:ring-4 focus:ring-cyan-500/10 nx-field';
+
+/* ── 12 · ERROR BOUNDARY ───────────────────────────────────────────────── */
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      error: null,
+      info: null
+    };
+  }
+  static getDerivedStateFromError(error) {
+    return {
+      error
+    };
+  }
+  componentDidCatch(error, info) {
+    console.error('[NEXUS] render failure', error, info);
+    this.setState({
+      info
+    });
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    const err = this.state.error;
+    return /*#__PURE__*/_jsx("div", {
+      className: "nx-scroll h-full overflow-auto bg-slate-950 p-6",
+      children: /*#__PURE__*/_jsxs("div", {
+        className: "mx-auto max-w-2xl rounded-2xl border border-rose-500/30 bg-slate-900/80 p-7 backdrop-blur-md",
+        children: [/*#__PURE__*/_jsxs("div", {
+          className: "flex items-center gap-3",
+          children: [/*#__PURE__*/_jsx("div", {
+            className: "grid h-11 w-11 place-items-center rounded-xl border border-rose-500/30 bg-rose-500/10 text-rose-300",
+            children: /*#__PURE__*/_jsx(Icon, {
+              name: "ShieldAlert",
+              size: 20
+            })
+          }), /*#__PURE__*/_jsxs("div", {
+            children: [/*#__PURE__*/_jsx("h1", {
+              className: "text-lg font-bold text-white",
+              children: "Workspace crashed"
+            }), /*#__PURE__*/_jsx("p", {
+              className: "text-xs text-slate-400",
+              children: "The interface hit an unrecoverable render error. Your projects are still safe in LocalStorage."
+            })]
+          })]
+        }), /*#__PURE__*/_jsxs("pre", {
+          className: "nx-scroll mt-5 max-h-56 overflow-auto rounded-xl border border-slate-800/70 bg-slate-950/80 p-4 text-[11.5px] leading-relaxed text-rose-200",
+          children: [String(err && err.stack || err && err.message || err), this.state.info && this.state.info.componentStack ? '\n\n' + this.state.info.componentStack : '']
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "mt-5 flex flex-wrap gap-2",
+          children: [/*#__PURE__*/_jsx(Button, {
+            variant: "primary",
+            size: "sm",
+            icon: "RotateCcw",
+            onClick: () => this.setState({
+              error: null,
+              info: null
+            }),
+            children: "Recover interface"
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "RefreshCw",
+            onClick: () => window.location.reload(),
+            children: "Hard reload"
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "danger",
+            size: "sm",
+            icon: "Trash2",
+            onClick: () => {
+              try {
+                window.localStorage.clear();
+              } catch (e) {/* ignore */}
+              window.location.reload();
+            },
+            children: "Purge storage & reload"
+          })]
+        }), /*#__PURE__*/_jsx("p", {
+          className: "mt-4 text-[11px] text-slate-500",
+          children: "Purge storage permanently deletes every project held in this browser. Download anything you need first."
+        })]
+      })
+    });
+  }
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUS IDE — DASHBOARD LAYER
+   Project grid, project cards, and the two-step "New Project" wizard.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function TypeBadge({
+  type,
+  className = ''
+}) {
+  const single = type === 'single';
+  return /*#__PURE__*/_jsx(Badge, {
+    tone: single ? 'cyan' : 'violet',
+    icon: single ? 'FileCode2' : 'Files',
+    className: className,
+    children: single ? 'Single HTML' : 'Multi-file Split'
+  });
+}
+function ProjectCard({
+  project,
+  onOpen,
+  onRename,
+  onDownload,
+  onDelete,
+  onDuplicate
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onDoc = e => {
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [menuOpen]);
+  const size = useMemo(() => {
+    const f = project.files || {};
+    return (f.html || '').length + (f.css || '').length + (f.js || '').length;
+  }, [project]);
+  const menuItem = 'flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs font-medium text-slate-300 transition-colors hover:bg-slate-800/80 hover:text-white';
+  return /*#__PURE__*/_jsxs("article", {
+    className: "group relative flex flex-col overflow-hidden rounded-2xl border border-slate-800/60 bg-slate-900/80 backdrop-blur-md transition-all duration-300 hover:-translate-y-1 hover:border-cyan-500/40 hover:shadow-2xl hover:shadow-cyan-500/10",
+    children: [/*#__PURE__*/_jsxs("div", {
+      className: "nx-scanline relative h-24 overflow-hidden border-b border-slate-800/60 bg-gradient-to-br from-slate-900 via-slate-950 to-slate-900",
+      children: [/*#__PURE__*/_jsx("div", {
+        className: "nx-grid-bg absolute inset-0 opacity-60"
+      }), /*#__PURE__*/_jsx("div", {
+        className: "absolute inset-0 flex items-center justify-center",
+        children: /*#__PURE__*/_jsx("div", {
+          className: cx('grid h-12 w-12 place-items-center rounded-xl border transition-transform duration-300 group-hover:scale-110', project.type === 'single' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-violet-500/30 bg-violet-500/10 text-violet-300'),
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: project.type === 'single' ? 'FileCode2' : 'Layers',
+            size: 22
+          })
+        })
+      }), /*#__PURE__*/_jsx("div", {
+        className: "absolute right-3 top-3",
+        children: /*#__PURE__*/_jsx(TypeBadge, {
+          type: project.type
+        })
+      })]
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "flex flex-1 flex-col p-4",
+      children: [/*#__PURE__*/_jsx("h3", {
+        className: "truncate text-sm font-bold text-white",
+        title: project.name,
+        children: project.name
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500",
+        children: [/*#__PURE__*/_jsxs("span", {
+          className: "inline-flex items-center gap-1",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "CalendarClock",
+            size: 11
+          }), fmtDate(project.createdAt)]
+        }), /*#__PURE__*/_jsxs("span", {
+          className: "inline-flex items-center gap-1",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "HardDrive",
+            size: 11
+          }), bytesFmt(size)]
+        }), /*#__PURE__*/_jsxs("span", {
+          className: "inline-flex items-center gap-1",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "History",
+            size: 11
+          }), fmtRelative(project.updatedAt)]
+        })]
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "mt-4 flex items-center gap-2",
+        children: [/*#__PURE__*/_jsx(Button, {
+          variant: "primary",
+          size: "sm",
+          icon: "SquarePen",
+          className: "flex-1",
+          onClick: () => onOpen(project),
+          children: "Open"
+        }), /*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          icon: "Download",
+          onClick: () => onDownload(project),
+          "aria-label": "Download project"
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "relative",
+          ref: menuRef,
+          children: [/*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "MoreVertical",
+            "aria-label": "More actions",
+            onClick: () => setMenuOpen(v => !v)
+          }), menuOpen ? /*#__PURE__*/_jsxs("div", {
+            className: "absolute right-0 top-full z-30 mt-2 w-44 rounded-xl border border-slate-800/80 bg-slate-900/95 p-1.5 shadow-2xl shadow-black/60 backdrop-blur-xl animate-pop-in",
+            children: [/*#__PURE__*/_jsxs("button", {
+              className: menuItem,
+              onClick: () => {
+                setMenuOpen(false);
+                onRename(project);
+              },
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: "Pencil",
+                size: 13
+              }), " Rename project"]
+            }), /*#__PURE__*/_jsxs("button", {
+              className: menuItem,
+              onClick: () => {
+                setMenuOpen(false);
+                onDuplicate(project);
+              },
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: "CopyPlus",
+                size: 13
+              }), " Duplicate"]
+            }), /*#__PURE__*/_jsxs("button", {
+              className: menuItem,
+              onClick: () => {
+                setMenuOpen(false);
+                onDownload(project);
+              },
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: "Download",
+                size: 13
+              }), " Download ", project.type === 'single' ? '.html' : '.zip']
+            }), /*#__PURE__*/_jsx("div", {
+              className: "my-1 h-px bg-slate-800"
+            }), /*#__PURE__*/_jsxs("button", {
+              className: cx(menuItem, 'text-rose-300 hover:bg-rose-500/10 hover:text-rose-200'),
+              onClick: () => {
+                setMenuOpen(false);
+                onDelete(project);
+              },
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: "Trash2",
+                size: 13
+              }), " Delete project"]
+            })]
+          }) : null]
+        })]
+      })]
+    })]
+  });
+}
+
+/* ── NEW PROJECT WIZARD (2 sequential steps) ───────────────────────────── */
+function NewProjectModal({
+  open,
+  onClose,
+  onCreate
+}) {
+  const [step, setStep] = useState(1);
+  const [type, setType] = useState('single');
+  const [name, setName] = useState('');
+  const [imported, setImported] = useState(null); // { name, text, ext }
+  const [importError, setImportError] = useState('');
+  const [nameError, setNameError] = useState('');
+  const [dragging, setDragging] = useState(false);
+  const fileRef = useRef(null);
+  useEffect(() => {
+    if (open) {
+      setStep(1);
+      setType('single');
+      setName('');
+      setImported(null);
+      setImportError('');
+      setNameError('');
+      setDragging(false);
+    }
+  }, [open]);
+  const readFile = useCallback(file => {
+    if (!file) return;
+    const ext = String(file.name).split('.').pop().toLowerCase();
+    const allowed = ['html', 'htm', 'css', 'js', 'mjs', 'cjs', 'txt', 'md', 'svg', 'json'];
+    if (allowed.indexOf(ext) === -1) {
+      setImportError('Unsupported file type ".' + ext + '". Import HTML, CSS, JS, JSON, SVG or plain text.');
+      setImported(null);
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setImportError('File is larger than 2 MB (' + bytesFmt(file.size) + '). Import a smaller source file.');
+      setImported(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onerror = () => setImportError('The browser could not read that file.');
+    reader.onload = () => {
+      setImportError('');
+      setImported({
+        name: file.name,
+        text: String(reader.result || ''),
+        ext: ext
+      });
+      if (!name.trim()) setName(file.name.replace(/\.[^.]+$/, ''));
+    };
+    reader.readAsText(file);
+  }, [name]);
+  const onDrop = e => {
+    e.preventDefault();
+    setDragging(false);
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    readFile(file);
+  };
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) {
+      setNameError('Give the project a name before creating it.');
+      setStep(2);
+      return;
+    }
+    if (trimmed.length > 64) {
+      setNameError('Keep the project name under 64 characters.');
+      return;
+    }
+    const seed = {};
+    if (imported) {
+      const probe = {
+        type,
+        files: {
+          html: '',
+          css: '',
+          js: ''
+        }
+      };
+      const merged = ingestFile(probe, imported.name, imported.text);
+      seed.html = merged.files.html;
+      seed.css = merged.files.css;
+      seed.js = merged.files.js;
+    }
+    onCreate(trimmed, type, seed, imported ? imported.name : null);
+  };
+  const structureCard = (value, icon, title, body, tone) => {
+    const active = type === value;
+    const tones = {
+      cyan: active ? 'border-cyan-500/70 bg-cyan-500/10 shadow-lg shadow-cyan-500/20' : 'border-slate-800/70 bg-slate-950/50 hover:border-cyan-500/40',
+      violet: active ? 'border-violet-500/70 bg-violet-500/10 shadow-lg shadow-violet-500/20' : 'border-slate-800/70 bg-slate-950/50 hover:border-violet-500/40'
+    };
+    return /*#__PURE__*/_jsxs("button", {
+      type: "button",
+      onClick: () => setType(value),
+      className: cx('group relative flex flex-col rounded-2xl border p-5 text-left transition-all duration-300 hover:-translate-y-0.5', tones[tone]),
+      children: [/*#__PURE__*/_jsxs("div", {
+        className: "flex items-center justify-between",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: cx('grid h-11 w-11 place-items-center rounded-xl border', tone === 'cyan' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-violet-500/30 bg-violet-500/10 text-violet-300'),
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: icon,
+            size: 20
+          })
+        }), /*#__PURE__*/_jsx("div", {
+          className: cx('grid h-5 w-5 place-items-center rounded-full border-2 transition-colors', active ? tone === 'cyan' ? 'border-cyan-400 bg-cyan-400' : 'border-violet-400 bg-violet-400' : 'border-slate-600'),
+          children: active ? /*#__PURE__*/_jsx(Icon, {
+            name: "Check",
+            size: 12,
+            className: "text-slate-950",
+            strokeWidth: 3
+          }) : null
+        })]
+      }), /*#__PURE__*/_jsx("div", {
+        className: "mt-4 flex items-center gap-2",
+        children: /*#__PURE__*/_jsx(Badge, {
+          tone: tone,
+          children: value === 'single' ? 'Badge A' : 'Badge B'
+        })
+      }), /*#__PURE__*/_jsx("h3", {
+        className: "mt-3 text-sm font-bold text-white",
+        children: title
+      }), /*#__PURE__*/_jsx("p", {
+        className: "mt-1.5 text-xs leading-relaxed text-slate-400",
+        children: body
+      })]
+    });
+  };
+  return /*#__PURE__*/_jsxs(Modal, {
+    open: open,
+    onClose: onClose,
+    size: "md",
+    labelledBy: "nx-new-project-title",
+    children: [/*#__PURE__*/_jsx(ModalHeader, {
+      icon: "FolderPlus",
+      title: "Create a new project",
+      tone: "cyan",
+      onClose: onClose,
+      subtitle: step === 1 ? 'Step 1 of 2 · Choose the workspace structure' : 'Step 2 of 2 · Name it and optionally import existing code'
+    }), /*#__PURE__*/_jsx("div", {
+      className: "flex items-center gap-2 border-b border-slate-800/70 bg-slate-950/40 px-6 py-3",
+      children: [1, 2].map(n => /*#__PURE__*/_jsxs(React.Fragment, {
+        children: [/*#__PURE__*/_jsxs("div", {
+          className: cx('flex items-center gap-2 text-[11px] font-bold uppercase tracking-widest transition-colors', step >= n ? 'text-cyan-300' : 'text-slate-600'),
+          children: [/*#__PURE__*/_jsx("span", {
+            className: cx('grid h-6 w-6 place-items-center rounded-full border text-[11px]', step > n ? 'border-emerald-500/50 bg-emerald-500/15 text-emerald-300' : step === n ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-300' : 'border-slate-700 text-slate-600'),
+            children: step > n ? /*#__PURE__*/_jsx(Icon, {
+              name: "Check",
+              size: 11,
+              strokeWidth: 3
+            }) : n
+          }), n === 1 ? 'Structure' : 'Metadata']
+        }), n === 1 ? /*#__PURE__*/_jsx("div", {
+          className: cx('h-px flex-1 transition-colors', step > 1 ? 'bg-emerald-500/40' : 'bg-slate-800')
+        }) : null]
+      }, n))
+    }), /*#__PURE__*/_jsx("div", {
+      className: "nx-scroll flex-1 overflow-y-auto px-6 py-6",
+      children: step === 1 ? /*#__PURE__*/_jsxs("div", {
+        className: "grid gap-4 sm:grid-cols-2 animate-fade-in",
+        children: [structureCard('single', 'FileCode2', 'Single Unified HTML File', 'One document holds markup, styles and behaviour. Fastest path to a shareable tunnel link.', 'cyan'), structureCard('split', 'Layers', 'Split Component View', 'HTML, CSS and JS live in separate panes and are compiled into one portable document on demand.', 'violet')]
+      }) : /*#__PURE__*/_jsxs("div", {
+        className: "space-y-6 animate-fade-in",
+        children: [/*#__PURE__*/_jsx(Field, {
+          label: "Project name",
+          icon: "Type",
+          error: nameError,
+          hint: "Shown on the dashboard card, in the workspace header and inside the tunnel payload.",
+          children: /*#__PURE__*/_jsx("input", {
+            type: "text",
+            className: inputClass,
+            autoFocus: true,
+            maxLength: 64,
+            placeholder: "e.g. Realtime Video Lounge",
+            value: name,
+            onChange: e => {
+              setName(e.target.value);
+              if (nameError) setNameError('');
+            },
+            onKeyDown: e => {
+              if (e.key === 'Enter') submit();
+            }
+          })
+        }), /*#__PURE__*/_jsx(Field, {
+          label: "Import code from a local file (optional)",
+          icon: "Upload",
+          hint: imported ? undefined : 'Drop an .html, .css, .js, .json, .svg or .txt file. For split projects the pane is chosen by extension.',
+          children: /*#__PURE__*/_jsxs("div", {
+            onDragOver: e => {
+              e.preventDefault();
+              setDragging(true);
+            },
+            onDragLeave: () => setDragging(false),
+            onDrop: onDrop,
+            onClick: () => fileRef.current && fileRef.current.click(),
+            className: cx('flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed px-6 py-8 text-center transition-all duration-200', dragging ? 'border-cyan-400/80 bg-cyan-500/10' : 'border-slate-700/70 bg-slate-950/50 hover:border-cyan-500/50 hover:bg-slate-900/50'),
+            children: [/*#__PURE__*/_jsx("input", {
+              ref: fileRef,
+              type: "file",
+              className: "hidden",
+              accept: ".html,.htm,.css,.js,.mjs,.cjs,.txt,.md,.svg,.json",
+              onChange: e => readFile(e.target.files && e.target.files[0])
+            }), imported ? /*#__PURE__*/_jsxs(_Fragment, {
+              children: [/*#__PURE__*/_jsx("div", {
+                className: "grid h-11 w-11 place-items-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+                children: /*#__PURE__*/_jsx(Icon, {
+                  name: "FileCheck2",
+                  size: 20
+                })
+              }), /*#__PURE__*/_jsx("p", {
+                className: "mt-3 text-sm font-semibold text-white",
+                children: imported.name
+              }), /*#__PURE__*/_jsxs("p", {
+                className: "mt-1 text-xs text-slate-400",
+                children: [bytesFmt(imported.text.length), " · ", lineCount(imported.text), " lines · detected as ", /*#__PURE__*/_jsxs("span", {
+                  className: "font-mono text-cyan-300",
+                  children: [".", imported.ext]
+                })]
+              }), /*#__PURE__*/_jsx("button", {
+                type: "button",
+                className: "mt-3 text-[11px] font-semibold text-rose-300 hover:text-rose-200",
+                onClick: e => {
+                  e.stopPropagation();
+                  setImported(null);
+                  setImportError('');
+                },
+                children: "Remove import"
+              })]
+            }) : /*#__PURE__*/_jsxs(_Fragment, {
+              children: [/*#__PURE__*/_jsx("div", {
+                className: "grid h-11 w-11 place-items-center rounded-xl border border-slate-700/60 bg-slate-900/70 text-slate-400",
+                children: /*#__PURE__*/_jsx(Icon, {
+                  name: "UploadCloud",
+                  size: 20
+                })
+              }), /*#__PURE__*/_jsx("p", {
+                className: "mt-3 text-sm font-semibold text-slate-200",
+                children: "Drop a file here, or click to browse"
+              }), /*#__PURE__*/_jsx("p", {
+                className: "mt-1 text-xs text-slate-500",
+                children: "Max 2 MB · nothing ever leaves this browser"
+              })]
+            })]
+          })
+        }), importError ? /*#__PURE__*/_jsxs("div", {
+          className: "flex items-start gap-2.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-xs text-rose-200",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "AlertTriangle",
+            size: 14,
+            className: "mt-0.5 shrink-0"
+          }), /*#__PURE__*/_jsx("span", {
+            children: importError
+          })]
+        }) : null, /*#__PURE__*/_jsxs("div", {
+          className: "rounded-xl border border-slate-800/70 bg-slate-950/50 px-4 py-3 text-xs text-slate-400",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "flex items-center gap-2 font-semibold text-slate-300",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Info",
+              size: 13
+            }), " Selected structure"]
+          }), /*#__PURE__*/_jsx("p", {
+            className: "mt-1.5",
+            children: type === 'single' ? 'Single Unified HTML File — one pane holding the whole document.' : 'Split Component View — index.html, style.css and script.js panes, compiled together for preview, download and tunnel.'
+          })]
+        })]
+      })
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "flex items-center justify-between gap-3 border-t border-slate-800/70 bg-slate-950/40 px-6 py-4",
+      children: [/*#__PURE__*/_jsx("div", {
+        className: "text-[11px] text-slate-500",
+        children: step === 1 ? 'Pick a structure to continue' : imported ? 'Imported code will seed the project' : 'Starter template will be loaded'
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "flex gap-2",
+        children: [step === 2 ? /*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          icon: "ChevronLeft",
+          onClick: () => setStep(1),
+          children: "Back"
+        }) : null, step === 1 ? /*#__PURE__*/_jsx(Button, {
+          variant: "primary",
+          size: "sm",
+          icon: "ChevronRight",
+          onClick: () => setStep(2),
+          children: "Continue"
+        }) : /*#__PURE__*/_jsx(Button, {
+          variant: "primary",
+          size: "sm",
+          icon: "Sparkles",
+          onClick: submit,
+          children: "Create project"
+        })]
+      })]
+    })]
+  });
+}
+
+/* ── DASHBOARD ─────────────────────────────────────────────────────────── */
+function Dashboard({
+  projects,
+  swState,
+  storageWarning,
+  onNew,
+  onOpen,
+  onRename,
+  onDownload,
+  onDelete,
+  onDuplicate,
+  onResetAll
+}) {
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState('all');
+  const stats = useMemo(() => {
+    let bytes = 0,
+      single = 0,
+      split = 0;
+    projects.forEach(p => {
+      const f = p.files || {};
+      bytes += (f.html || '').length + (f.css || '').length + (f.js || '').length;
+      if (p.type === 'single') single += 1;else split += 1;
+    });
+    return {
+      bytes,
+      single,
+      split
+    };
+  }, [projects]);
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return projects.filter(p => filter === 'all' ? true : p.type === filter).filter(p => !q ? true : p.name.toLowerCase().indexOf(q) !== -1).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+  }, [projects, query, filter]);
+  const swTone = swState === 'controlling' || swState === 'active' || swState === 'registered' ? 'emerald' : swState === 'failed' ? 'rose' : 'amber';
+  const swLabel = swState === 'controlling' ? 'Tunnel router online' : swState === 'active' ? 'Router active' : swState === 'registered' ? 'Router registering' : swState === 'failed' ? 'Router offline' : swState === 'insecure' ? 'Router needs https' : 'Router unavailable';
+  const filterChip = (value, label, count) => /*#__PURE__*/_jsxs("button", {
+    onClick: () => setFilter(value),
+    className: cx('inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all duration-200', filter === value ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-200' : 'border-slate-800/70 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'),
+    children: [label, /*#__PURE__*/_jsx("span", {
+      className: "rounded-md bg-slate-950/60 px-1.5 py-0.5 text-[10px] text-slate-400",
+      children: count
+    })]
+  });
+  return /*#__PURE__*/_jsx("div", {
+    className: "nx-scroll h-full overflow-y-auto",
+    children: /*#__PURE__*/_jsxs("div", {
+      className: "nx-radial",
+      children: [/*#__PURE__*/_jsx("header", {
+        className: "sticky top-0 z-40 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md",
+        children: /*#__PURE__*/_jsxs("div", {
+          className: "mx-auto flex max-w-7xl items-center gap-4 px-5 py-3.5",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "flex items-center gap-3",
+            children: [/*#__PURE__*/_jsx("div", {
+              className: "grid h-10 w-10 place-items-center rounded-xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/20 to-emerald-500/10 text-cyan-300 animate-float",
+              children: /*#__PURE__*/_jsx(Icon, {
+                name: "Rocket",
+                size: 19
+              })
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "leading-tight",
+              children: [/*#__PURE__*/_jsx("div", {
+                className: "text-sm font-black tracking-tight text-white",
+                children: APP.name
+              }), /*#__PURE__*/_jsx("div", {
+                className: "text-[10.5px] uppercase tracking-[.16em] text-slate-500",
+                children: APP.tagline
+              })]
+            })]
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "ml-auto flex items-center gap-2",
+            children: [/*#__PURE__*/_jsx(Badge, {
+              tone: swTone,
+              icon: swTone === 'emerald' ? 'ShieldCheck' : 'ShieldAlert',
+              className: "hidden sm:inline-flex",
+              children: swLabel
+            }), /*#__PURE__*/_jsxs(Badge, {
+              tone: "slate",
+              className: "hidden md:inline-flex",
+              children: ["v", APP.version]
+            }), /*#__PURE__*/_jsx(Button, {
+              variant: "primary",
+              size: "sm",
+              icon: "Plus",
+              onClick: onNew,
+              children: "New Project"
+            })]
+          })]
+        })
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "mx-auto max-w-7xl px-5 pb-16 pt-8",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: "grid gap-4 sm:grid-cols-2 lg:grid-cols-4",
+          children: [{
+            label: 'Projects',
+            value: projects.length,
+            icon: 'FolderKanban',
+            tone: 'cyan'
+          }, {
+            label: 'Unified documents',
+            value: stats.single,
+            icon: 'FileCode2',
+            tone: 'emerald'
+          }, {
+            label: 'Split builds',
+            value: stats.split,
+            icon: 'Layers',
+            tone: 'violet'
+          }, {
+            label: 'Source footprint',
+            value: bytesFmt(stats.bytes),
+            icon: 'HardDrive',
+            tone: 'amber'
+          }].map(s => /*#__PURE__*/_jsxs("div", {
+            className: "rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4 backdrop-blur-md transition-colors hover:border-slate-700",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: "flex items-center justify-between",
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "text-[11px] font-bold uppercase tracking-[.14em] text-slate-500",
+                children: s.label
+              }), /*#__PURE__*/_jsx(Icon, {
+                name: s.icon,
+                size: 15,
+                className: cx(s.tone === 'cyan' ? 'text-cyan-400' : s.tone === 'emerald' ? 'text-emerald-400' : s.tone === 'violet' ? 'text-violet-400' : 'text-amber-400')
+              })]
+            }), /*#__PURE__*/_jsx("div", {
+              className: "mt-2 text-2xl font-black tracking-tight text-white",
+              children: s.value
+            })]
+          }, s.label))
+        }), storageWarning ? /*#__PURE__*/_jsxs("div", {
+          className: "mt-5 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "AlertTriangle",
+            size: 15,
+            className: "mt-0.5 shrink-0"
+          }), /*#__PURE__*/_jsx("span", {
+            children: storageWarning
+          })]
+        }) : null, /*#__PURE__*/_jsxs("div", {
+          className: "mt-8 flex flex-wrap items-center gap-3",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "relative min-w-[220px] flex-1",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Search",
+              size: 15,
+              className: "pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500"
+            }), /*#__PURE__*/_jsx("input", {
+              type: "text",
+              value: query,
+              onChange: e => setQuery(e.target.value),
+              placeholder: "Search projects by name…",
+              className: cx(inputClass, 'py-2.5 pl-10')
+            })]
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "flex items-center gap-2",
+            children: [filterChip('all', 'All', projects.length), filterChip('single', 'Single', stats.single), filterChip('split', 'Split', stats.split)]
+          }), projects.length ? /*#__PURE__*/_jsx(Button, {
+            variant: "subtle",
+            size: "sm",
+            icon: "Trash2",
+            onClick: onResetAll,
+            className: "ml-auto",
+            children: "Reset workspace"
+          }) : null]
+        }), visible.length ? /*#__PURE__*/_jsx("div", {
+          className: "mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4",
+          children: visible.map(p => /*#__PURE__*/_jsx(ProjectCard, {
+            project: p,
+            onOpen: onOpen,
+            onRename: onRename,
+            onDownload: onDownload,
+            onDelete: onDelete,
+            onDuplicate: onDuplicate
+          }, p.id))
+        }) : projects.length ? /*#__PURE__*/_jsxs("div", {
+          className: "mt-10 rounded-2xl border border-dashed border-slate-800 bg-slate-900/40 py-16 text-center",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "SearchX",
+            size: 30,
+            className: "mx-auto text-slate-600"
+          }), /*#__PURE__*/_jsx("h3", {
+            className: "mt-4 text-sm font-bold text-slate-300",
+            children: "No projects match that filter"
+          }), /*#__PURE__*/_jsx("p", {
+            className: "mt-1 text-xs text-slate-500",
+            children: "Try a different keyword or switch the structure filter."
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "X",
+            className: "mt-4",
+            onClick: () => {
+              setQuery('');
+              setFilter('all');
+            },
+            children: "Clear filters"
+          })]
+        }) : /*#__PURE__*/_jsxs("div", {
+          className: "nx-scanline relative mt-10 overflow-hidden rounded-3xl border border-dashed border-slate-800 bg-slate-900/40 py-20 text-center",
+          children: [/*#__PURE__*/_jsx("div", {
+            className: "nx-grid-bg absolute inset-0 opacity-40"
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "relative",
+            children: [/*#__PURE__*/_jsx("div", {
+              className: "mx-auto grid h-16 w-16 place-items-center rounded-2xl border border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
+              children: /*#__PURE__*/_jsx(Icon, {
+                name: "FolderPlus",
+                size: 28
+              })
+            }), /*#__PURE__*/_jsx("h3", {
+              className: "mt-5 text-lg font-black tracking-tight text-white",
+              children: "Your workspace is empty"
+            }), /*#__PURE__*/_jsx("p", {
+              className: "mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-400",
+              children: "Create your first project, edit it in the split-pane IDE, then spin up a Browser Tunnel to serve it as a genuine top-level document — no iframes, full WebRTC and device access."
+            }), /*#__PURE__*/_jsx("div", {
+              className: "mt-6 flex flex-wrap items-center justify-center gap-2",
+              children: /*#__PURE__*/_jsx(Button, {
+                variant: "primary",
+                size: "md",
+                icon: "Plus",
+                onClick: onNew,
+                children: "Create first project"
+              })
+            }), /*#__PURE__*/_jsx("div", {
+              className: "mx-auto mt-8 grid max-w-3xl gap-3 px-6 text-left sm:grid-cols-3",
+              children: [{
+                icon: 'FileCode2',
+                title: 'Unified or split',
+                body: 'One HTML file, or HTML + CSS + JS panes.'
+              }, {
+                icon: 'RadioTower',
+                title: 'Browser Tunnel',
+                body: 'Compressed, self-expiring top-level preview URLs.'
+              }, {
+                icon: 'Database',
+                title: 'Fully backendless',
+                body: 'Everything persists in this browser via LocalStorage.'
+              }].map(f => /*#__PURE__*/_jsxs("div", {
+                className: "rounded-xl border border-slate-800/70 bg-slate-950/50 p-4",
+                children: [/*#__PURE__*/_jsx(Icon, {
+                  name: f.icon,
+                  size: 16,
+                  className: "text-cyan-400"
+                }), /*#__PURE__*/_jsx("div", {
+                  className: "mt-2 text-xs font-bold text-slate-200",
+                  children: f.title
+                }), /*#__PURE__*/_jsx("div", {
+                  className: "mt-1 text-[11px] leading-relaxed text-slate-500",
+                  children: f.body
+                })]
+              }, f.title))
+            })]
+          })]
+        })]
+      }), /*#__PURE__*/_jsx("footer", {
+        className: "border-t border-slate-800/60 bg-slate-950/60 px-5 py-5",
+        children: /*#__PURE__*/_jsxs("div", {
+          className: "mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 text-[11px] text-slate-500",
+          children: [/*#__PURE__*/_jsxs("span", {
+            className: "inline-flex items-center gap-1.5",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Lock",
+              size: 11
+            }), "No backend · no telemetry · no uploads"]
+          }), /*#__PURE__*/_jsxs("span", {
+            className: "inline-flex items-center gap-1.5",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Database",
+              size: 11
+            }), "LocalStorage persistence"]
+          }), /*#__PURE__*/_jsxs("span", {
+            className: "inline-flex items-center gap-1.5",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Timer",
+              size: 11
+            }), "Tunnel links expire after 15 minutes"]
+          }), /*#__PURE__*/_jsxs("span", {
+            className: "ml-auto",
+            children: [APP.name, " ", APP.version]
+          })]
+        })
+      })]
+    })
+  });
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUS IDE — WORKSPACE · TUNNEL · APP SHELL
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* ── CODE PANE ─────────────────────────────────────────────────────────── */
+function CodePane({
+  pane,
+  value,
+  onChange,
+  onClear,
+  onRemoveTemplate,
+  wrap,
+  onToggleWrap,
+  layout
+}) {
+  const taRef = useRef(null);
+  const gutterRef = useRef(null);
+  const [cursor, setCursor] = useState({
+    line: 1,
+    col: 1
+  });
+  const [copied, setCopied] = useState(false);
+  const lines = Math.max(1, lineCount(value));
+  const syncScroll = () => {
+    if (gutterRef.current && taRef.current) gutterRef.current.scrollTop = taRef.current.scrollTop;
+  };
+  const updateCursor = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const upto = ta.value.slice(0, ta.selectionStart);
+    const parts = upto.split('\n');
+    setCursor({
+      line: parts.length,
+      col: parts[parts.length - 1].length + 1
+    });
+  };
+  const handleKeyDown = e => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const ta = taRef.current;
+      const s = ta.selectionStart,
+        t = ta.selectionEnd;
+      const next = value.slice(0, s) + '  ' + value.slice(t);
+      onChange(next);
+      requestAnimationFrame(() => {
+        ta.selectionStart = ta.selectionEnd = s + 2;
+        updateCursor();
+      });
+      return;
+    }
+    if (e.key === 'Enter') {
+      const ta = taRef.current;
+      const s = ta.selectionStart;
+      const lineStart = value.lastIndexOf('\n', s - 1) + 1;
+      const indent = (value.slice(lineStart, s).match(/^[ \t]*/) || [''])[0];
+      if (indent) {
+        e.preventDefault();
+        const next = value.slice(0, s) + '\n' + indent + value.slice(ta.selectionEnd);
+        onChange(next);
+        const pos = s + 1 + indent.length;
+        requestAnimationFrame(() => {
+          ta.selectionStart = ta.selectionEnd = pos;
+          updateCursor();
+        });
+      }
+    }
+  };
+  const copyPane = async () => {
+    const ok = await copyText(value);
+    setCopied(ok);
+    setTimeout(() => setCopied(false), 1400);
+  };
+  const tone = {
+    cyan: 'text-cyan-300 border-cyan-500/30 bg-cyan-500/10',
+    violet: 'text-violet-300 border-violet-500/30 bg-violet-500/10',
+    amber: 'text-amber-300 border-amber-500/30 bg-amber-500/10'
+  }[pane.tone] || 'text-slate-300 border-slate-700 bg-slate-800/40';
+  return /*#__PURE__*/_jsxs("section", {
+    className: "flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-slate-800/60 bg-slate-900/70 backdrop-blur-md nx-inset",
+    children: [/*#__PURE__*/_jsxs("header", {
+      className: "flex shrink-0 items-center gap-2 border-b border-slate-800/60 bg-slate-950/60 px-3 py-2",
+      children: [/*#__PURE__*/_jsx("span", {
+        className: cx('grid h-6 w-6 shrink-0 place-items-center rounded-md border', tone),
+        children: /*#__PURE__*/_jsx(Icon, {
+          name: pane.icon,
+          size: 12
+        })
+      }), /*#__PURE__*/_jsx("span", {
+        className: "text-xs font-bold tracking-wide text-slate-200",
+        children: pane.label
+      }), /*#__PURE__*/_jsx("span", {
+        className: "hidden font-mono text-[10.5px] text-slate-500 sm:inline",
+        children: pane.file
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "ml-auto flex items-center gap-1",
+        children: [/*#__PURE__*/_jsxs("span", {
+          className: "mr-1 hidden font-mono text-[10.5px] text-slate-500 md:inline",
+          children: [lines, " ln · ", bytesFmt(value.length)]
+        }), /*#__PURE__*/_jsx("button", {
+          onClick: onToggleWrap,
+          title: wrap ? 'Disable soft wrap' : 'Enable soft wrap',
+          "aria-label": "Toggle soft wrap",
+          className: cx('rounded-md p-1.5 transition-colors', wrap ? 'bg-cyan-500/15 text-cyan-300' : 'text-slate-500 hover:bg-slate-800 hover:text-slate-200'),
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: "WrapText",
+            size: 13
+          })
+        }), /*#__PURE__*/_jsx("button", {
+          onClick: copyPane,
+          title: "Copy pane contents",
+          "aria-label": "Copy pane contents",
+          className: "rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200",
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: copied ? 'Check' : 'Copy',
+            size: 13,
+            className: copied ? 'text-emerald-400' : ''
+          })
+        }), /*#__PURE__*/_jsx("button", {
+          onClick: onRemoveTemplate,
+          title: "Remove current template — leaves a blank canvas",
+          "aria-label": "Remove template",
+          className: "rounded-md p-1.5 text-slate-500 transition-colors hover:bg-amber-500/15 hover:text-amber-300",
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: "Eraser",
+            size: 13
+          })
+        }), /*#__PURE__*/_jsx("button", {
+          onClick: onClear,
+          title: "Clear this pane",
+          "aria-label": "Clear pane",
+          className: "rounded-md p-1.5 text-slate-500 transition-colors hover:bg-rose-500/15 hover:text-rose-300",
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: "Trash2",
+            size: 13
+          })
+        })]
+      })]
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "relative flex min-h-0 flex-1",
+      children: [/*#__PURE__*/_jsx("pre", {
+        ref: gutterRef,
+        "aria-hidden": "true",
+        className: "nx-scroll nx-gutter shrink-0 overflow-hidden border-r border-slate-800/60 bg-slate-950/50 py-3 text-right font-mono text-[12px] leading-[1.65] text-slate-600",
+        style: {
+          width: '52px',
+          margin: 0
+        },
+        children: Array.from({
+          length: lines
+        }, (_, i) => /*#__PURE__*/_jsx("div", {
+          className: "px-2",
+          children: i + 1
+        }, i))
+      }), /*#__PURE__*/_jsx("textarea", {
+        ref: taRef,
+        value: value,
+        spellCheck: false,
+        wrap: wrap ? 'soft' : 'off',
+        onChange: e => {
+          onChange(e.target.value);
+          updateCursor();
+        },
+        onScroll: syncScroll,
+        onKeyUp: updateCursor,
+        onClick: updateCursor,
+        onKeyDown: handleKeyDown,
+        placeholder: pane.placeholder,
+        className: cx('nx-scroll nx-editor min-h-0 flex-1 resize-none border-0 bg-transparent px-3 py-3 font-mono text-[12.5px] leading-[1.65] text-slate-200', wrap ? 'whitespace-pre-wrap' : 'overflow-x-auto whitespace-pre')
+      })]
+    }), /*#__PURE__*/_jsxs("footer", {
+      className: "flex shrink-0 items-center gap-3 border-t border-slate-800/60 bg-slate-950/50 px-3 py-1.5 font-mono text-[10.5px] text-slate-500",
+      children: [/*#__PURE__*/_jsxs("span", {
+        children: ["Ln ", cursor.line, ", Col ", cursor.col]
+      }), /*#__PURE__*/_jsxs("span", {
+        className: "hidden sm:inline",
+        children: [lines, " lines"]
+      }), /*#__PURE__*/_jsxs("span", {
+        className: "ml-auto",
+        children: [pane.label.toLowerCase(), " pane"]
+      })]
+    })]
+  });
+}
+
+/* ── TUNNEL MODAL ──────────────────────────────────────────────────────── */
+function TunnelModal({
+  open,
+  onClose,
+  tunnel,
+  project,
+  onRevoke,
+  onRecreate,
+  onOpenLink,
+  onCopy
+}) {
+  const [now, setNow] = useState(Date.now());
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!open) return undefined;
+    const t = setInterval(() => setNow(Date.now()), 500);
+    return () => clearInterval(t);
+  }, [open]);
+  useEffect(() => {
+    if (open) setCopied(false);
+  }, [open, tunnel && tunnel.id]);
+  if (!open || !tunnel) return null;
+  const remaining = tunnel.exp ? tunnel.exp - now : 0;
+  const live = tunnel.state === 'active' && remaining > 0;
+  const pct = tunnel.exp ? Math.max(0, Math.min(100, remaining / APP.ttl * 100)) : 0;
+  const doCopy = async () => {
+    const ok = await copyText(tunnel.url || '');
+    setCopied(ok);
+    onCopy && onCopy(ok);
+    setTimeout(() => setCopied(false), 1800);
+  };
+  const statusMap = {
+    active: {
+      tone: 'emerald',
+      icon: 'RadioTower',
+      label: 'Tunnel live'
+    },
+    expired: {
+      tone: 'amber',
+      icon: 'TimerOff',
+      label: 'Tunnel expired'
+    },
+    revoked: {
+      tone: 'rose',
+      icon: 'ShieldOff',
+      label: 'Tunnel revoked'
+    },
+    error: {
+      tone: 'rose',
+      icon: 'AlertTriangle',
+      label: 'Tunnel failed'
+    }
+  };
+  const st = statusMap[tunnel.state] || statusMap.active;
+  return /*#__PURE__*/_jsxs(Modal, {
+    open: open,
+    onClose: onClose,
+    size: "lg",
+    labelledBy: "nx-tunnel-title",
+    children: [/*#__PURE__*/_jsx(ModalHeader, {
+      icon: "RadioTower",
+      tone: live ? 'emerald' : st.tone === 'rose' ? 'rose' : 'cyan',
+      title: live ? 'Browser Tunnel is serving' : st.label,
+      subtitle: project ? project.name + ' · served as a real top-level document (zero iframes)' : undefined,
+      onClose: onClose
+    }), /*#__PURE__*/_jsx("div", {
+      className: "nx-scroll flex-1 overflow-y-auto px-6 py-6",
+      children: tunnel.state === 'error' ? /*#__PURE__*/_jsx("div", {
+        className: "rounded-2xl border border-rose-500/30 bg-rose-500/10 p-5",
+        children: /*#__PURE__*/_jsxs("div", {
+          className: "flex items-start gap-3",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "AlertTriangle",
+            size: 18,
+            className: "mt-0.5 shrink-0 text-rose-300"
+          }), /*#__PURE__*/_jsxs("div", {
+            children: [/*#__PURE__*/_jsx("h3", {
+              className: "text-sm font-bold text-rose-100",
+              children: "The tunnel could not be packed"
+            }), /*#__PURE__*/_jsx("p", {
+              className: "mt-1.5 text-xs leading-relaxed text-rose-200/90",
+              children: tunnel.error
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "mt-4 flex gap-2",
+              children: [/*#__PURE__*/_jsx(Button, {
+                variant: "danger",
+                size: "sm",
+                icon: "RefreshCw",
+                onClick: onRecreate,
+                children: "Retry"
+              }), /*#__PURE__*/_jsx(Button, {
+                variant: "ghost",
+                size: "sm",
+                onClick: onClose,
+                children: "Close"
+              })]
+            })]
+          })]
+        })
+      }) : /*#__PURE__*/_jsxs("div", {
+        className: "space-y-5",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: cx('nx-scanline relative overflow-hidden rounded-2xl border p-5', live ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-slate-700/60 bg-slate-950/50'),
+          children: /*#__PURE__*/_jsxs("div", {
+            className: "flex flex-wrap items-center gap-4",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: cx('relative grid h-14 w-14 shrink-0 place-items-center rounded-2xl border', live ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300' : 'border-slate-700 bg-slate-900 text-slate-400'),
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: live ? 'RadioTower' : 'PowerOff',
+                size: 24
+              }), live ? /*#__PURE__*/_jsx("span", {
+                className: "absolute -right-1 -top-1 h-3.5 w-3.5 rounded-full bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,.9)]"
+              }) : null]
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "min-w-[150px] flex-1",
+              children: [/*#__PURE__*/_jsxs("div", {
+                className: "flex items-center gap-2",
+                children: [/*#__PURE__*/_jsx(Badge, {
+                  tone: live ? 'emerald' : tunnel.state === 'expired' ? 'amber' : 'rose',
+                  icon: st.icon,
+                  children: st.label
+                }), /*#__PURE__*/_jsx(Badge, {
+                  tone: "slate",
+                  icon: "Clock",
+                  children: tunnel.state === 'active' ? 'Tunnel active for: ' + fmtClock(remaining) : fmtClock(0)
+                })]
+              }), /*#__PURE__*/_jsx("div", {
+                className: "mt-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-800",
+                children: /*#__PURE__*/_jsx("div", {
+                  className: cx('h-full rounded-full transition-all duration-500', pct > 50 ? 'bg-gradient-to-r from-emerald-400 to-cyan-400' : pct > 20 ? 'bg-gradient-to-r from-amber-400 to-emerald-400' : 'bg-gradient-to-r from-rose-500 to-amber-400'),
+                  style: {
+                    width: pct + '%'
+                  }
+                })
+              }), /*#__PURE__*/_jsx("p", {
+                className: "mt-2 text-[11px] text-slate-400",
+                children: live ? 'Link self-destructs at ' + fmtDate(tunnel.exp) + '. The Service Worker unpacks it in memory — nothing is ever uploaded.' : tunnel.state === 'revoked' ? 'This link has been killed. Anyone opening it now receives a revoked notice.' : 'This link has reached its expiry and no longer serves content.'
+              })]
+            })]
+          })
+        }), /*#__PURE__*/_jsx(Field, {
+          label: "Live deployment URL",
+          icon: "Link2",
+          hint: "Open it in a new tab, or share it. Anyone with the link can load the app while it is live.",
+          children: /*#__PURE__*/_jsxs("div", {
+            className: "flex flex-col gap-2 sm:flex-row",
+            children: [/*#__PURE__*/_jsx("input", {
+              readOnly: true,
+              value: tunnel.url || '',
+              onFocus: e => e.target.select(),
+              className: cx(inputClass, 'font-mono text-[11.5px] text-cyan-200')
+            }), /*#__PURE__*/_jsxs("div", {
+              className: "flex gap-2",
+              children: [/*#__PURE__*/_jsx(Button, {
+                variant: copied ? 'outline' : 'primary',
+                size: "md",
+                icon: copied ? 'Check' : 'Copy',
+                className: "shrink-0",
+                onClick: doCopy,
+                disabled: !live,
+                children: copied ? 'Copied' : 'Copy Live Link'
+              }), /*#__PURE__*/_jsx(Button, {
+                variant: "ghost",
+                size: "md",
+                icon: "ExternalLink",
+                className: "shrink-0",
+                onClick: onOpenLink,
+                disabled: !live,
+                children: "Open"
+              })]
+            })]
+          })
+        }), tunnel.oversized ? /*#__PURE__*/_jsxs("div", {
+          className: "flex items-start gap-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-200",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "AlertTriangle",
+            size: 14,
+            className: "mt-0.5 shrink-0"
+          }), /*#__PURE__*/_jsxs("span", {
+            children: ["This payload is ", tunnel.urlLength.toLocaleString(), " characters — beyond the ", APP.urlBudget.toLocaleString(), "-character comfort zone for URL transport. Some chat apps and proxies truncate very long links. For payloads this large, prefer the download button and host the file directly."]
+          })]
+        }) : null, /*#__PURE__*/_jsx("div", {
+          className: "grid gap-3 sm:grid-cols-4",
+          children: [{
+            label: 'Source size',
+            value: bytesFmt(tunnel.docBytes),
+            icon: 'FileCode2'
+          }, {
+            label: 'Packed payload',
+            value: tunnel.payloadChars.toLocaleString() + ' ch',
+            icon: 'Package'
+          }, {
+            label: 'Compression',
+            value: '−' + tunnel.ratio + '%',
+            icon: 'Minimize2'
+          }, {
+            label: 'URL length',
+            value: tunnel.urlLength.toLocaleString() + ' ch',
+            icon: 'Ruler'
+          }].map(m => /*#__PURE__*/_jsxs("div", {
+            className: "rounded-xl border border-slate-800/70 bg-slate-950/50 p-3.5",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: "flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-[.12em] text-slate-500",
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: m.icon,
+                size: 11
+              }), m.label]
+            }), /*#__PURE__*/_jsx("div", {
+              className: "mt-1.5 font-mono text-sm font-bold text-slate-100",
+              children: m.value
+            })]
+          }, m.label))
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "rounded-2xl border border-slate-800/70 bg-slate-950/50 p-5",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Cpu",
+              size: 13
+            }), " How this link works"]
+          }), /*#__PURE__*/_jsx("ol", {
+            className: "mt-3 space-y-2 text-xs leading-relaxed text-slate-400",
+            children: ['Your three panes are compiled into one document and compressed with lz-string into the ?t= query parameter.', 'A background Service Worker (sw.js) intercepts the navigation to preview.html and unpacks the payload straight into memory.', 'The browser receives a genuine top-level document — no iframe, so RTCPeerConnection, PeerJS, getUserMedia and device permissions all behave natively.', 'Expiry is enforced twice: the worker checks the timestamp on every request, and the page itself re-validates before painting.'].map((s, i) => /*#__PURE__*/_jsxs("li", {
+              className: "flex gap-3",
+              children: [/*#__PURE__*/_jsx("span", {
+                className: "mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-md border border-slate-700 bg-slate-900 font-mono text-[10px] text-cyan-300",
+                children: i + 1
+              }), /*#__PURE__*/_jsx("span", {
+                children: s
+              })]
+            }, i))
+          })]
+        })]
+      })
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "flex flex-wrap items-center justify-between gap-3 border-t border-slate-800/70 bg-slate-950/40 px-6 py-4",
+      children: [/*#__PURE__*/_jsxs("div", {
+        className: "flex items-center gap-2 text-[11px] text-slate-500",
+        children: [/*#__PURE__*/_jsx(Icon, {
+          name: "Lock",
+          size: 12
+        }), " Nothing leaves your browser — the link carries the code itself."]
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "flex gap-2",
+        children: [tunnel.state !== 'error' ? /*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          icon: "RefreshCw",
+          onClick: onRecreate,
+          children: "Re-arm tunnel"
+        }) : null, /*#__PURE__*/_jsx(Button, {
+          variant: "danger",
+          size: "sm",
+          icon: "ShieldOff",
+          onClick: onRevoke,
+          disabled: tunnel.state === 'revoked',
+          children: "Revoke / Kill Server"
+        }), /*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          icon: "X",
+          onClick: onClose,
+          children: "Close"
+        })]
+      })]
+    })]
+  });
+}
+
+/* ── WORKSPACE (THE IDE) ───────────────────────────────────────────────── */
+const PANES = {
+  single: [{
+    key: 'html',
+    label: 'HTML',
+    icon: 'FileCode2',
+    tone: 'cyan',
+    file: 'index.html',
+    placeholder: 'Paste or write your full HTML document here…'
+  }],
+  split: [{
+    key: 'html',
+    label: 'HTML',
+    icon: 'FileCode2',
+    tone: 'cyan',
+    file: 'index.html',
+    placeholder: '<!DOCTYPE html> …'
+  }, {
+    key: 'css',
+    label: 'CSS',
+    icon: 'Palette',
+    tone: 'violet',
+    file: 'style.css',
+    placeholder: '/* Styles for the document */'
+  }, {
+    key: 'js',
+    label: 'JS',
+    icon: 'Braces',
+    tone: 'amber',
+    file: 'script.js',
+    placeholder: '// Behaviour for the document'
+  }]
+};
+function Workspace({
+  project,
+  onBack,
+  onUpdate,
+  onDownload,
+  onSpinUp,
+  onRename,
+  toast
+}) {
+  const [layout, setLayout] = useState('columns'); // columns | tabs | preview-only
+  const [activeTab, setActiveTab] = useState('html');
+  const [wrap, setWrap] = useState(false);
+  const [previewOn, setPreviewOn] = useState(true);
+  const [previewKey, setPreviewKey] = useState(0);
+  const [dirty, setDirty] = useState(false);
+  const [savedAt, setSavedAt] = useState(project.updatedAt || Date.now());
+  const [helpOpen, setHelpOpen] = useState(false);
+  const panes = PANES[project.type] || PANES.single;
+  const files = project.files || {
+    html: '',
+    css: '',
+    js: ''
+  };
+  const previewDoc = useMemo(() => buildDocument({
+    ...project,
+    files
+  }), [project.type, files.html, files.css, files.js]);
+  const debouncedDoc = useDebounced(previewDoc, 700);
+
+  /* autosave */
+  useEffect(() => {
+    if (!dirty) return undefined;
+    const t = setTimeout(() => {
+      onUpdate({
+        files,
+        updatedAt: Date.now()
+      }, {
+        silent: true
+      });
+      setDirty(false);
+      setSavedAt(Date.now());
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [dirty, files]);
+
+  /* shortcuts */
+  useEffect(() => {
+    const onKey = e => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      if (e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        onUpdate({
+          files,
+          updatedAt: Date.now()
+        });
+        setDirty(false);
+        setSavedAt(Date.now());
+        toast('success', 'Project saved', 'All panes written to LocalStorage.');
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        onSpinUp();
+      } else if (e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setPreviewOn(v => !v);
+      } else if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setLayout(v => v === 'columns' ? 'tabs' : v === 'tabs' ? 'preview-only' : 'columns');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [files, onUpdate, onSpinUp, toast]);
+  const setPane = (key, value) => {
+    const next = {
+      ...files,
+      [key]: value
+    };
+    onUpdate({
+      files: next
+    }, {
+      silent: true
+    });
+    setDirty(true);
+  };
+  const clearPane = key => {
+    const next = {
+      ...files,
+      [key]: ''
+    };
+    onUpdate({
+      files: next
+    }, {
+      silent: true
+    });
+    setDirty(true);
+    toast('info', 'Pane cleared', 'The ' + key.toUpperCase() + ' pane is now empty.');
+  };
+  const removeTemplate = key => {
+    let next;
+    if (key === 'html') {
+      next = {
+        ...files,
+        html: BLANK_SHELL
+      };
+    } else {
+      next = {
+        ...files,
+        [key]: ''
+      };
+    }
+    onUpdate({
+      files: next
+    }, {
+      silent: true
+    });
+    setDirty(true);
+    toast('warn', 'Template removed', 'The ' + key.toUpperCase() + ' pane was reset to a blank canvas.');
+  };
+  const saveNow = () => {
+    onUpdate({
+      files,
+      updatedAt: Date.now()
+    });
+    setDirty(false);
+    setSavedAt(Date.now());
+    toast('success', 'Project saved', 'All panes written to LocalStorage.');
+  };
+  const layoutBtn = (value, icon, label, hint) => /*#__PURE__*/_jsxs("button", {
+    onClick: () => setLayout(value),
+    title: hint,
+    "aria-label": hint,
+    className: cx('inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200', layout === value ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-200' : 'border-slate-800/70 bg-slate-900/60 text-slate-400 hover:border-slate-700 hover:text-slate-200'),
+    children: [/*#__PURE__*/_jsx(Icon, {
+      name: icon,
+      size: 12
+    }), label]
+  });
+  return /*#__PURE__*/_jsxs("div", {
+    className: "flex h-full min-h-0 flex-col bg-slate-950",
+    children: [/*#__PURE__*/_jsxs("header", {
+      className: "z-40 shrink-0 border-b border-slate-800/60 bg-slate-950/80 backdrop-blur-md",
+      children: [/*#__PURE__*/_jsxs("div", {
+        className: "flex flex-wrap items-center gap-3 px-4 py-3",
+        children: [/*#__PURE__*/_jsx(Button, {
+          variant: "subtle",
+          size: "sm",
+          icon: "ArrowLeft",
+          onClick: onBack,
+          children: "Dashboard"
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "flex min-w-0 items-center gap-2.5",
+          children: [/*#__PURE__*/_jsx("span", {
+            className: cx('grid h-8 w-8 shrink-0 place-items-center rounded-lg border', project.type === 'single' ? 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300' : 'border-violet-500/30 bg-violet-500/10 text-violet-300'),
+            children: /*#__PURE__*/_jsx(Icon, {
+              name: project.type === 'single' ? 'FileCode2' : 'Layers',
+              size: 15
+            })
+          }), /*#__PURE__*/_jsxs("button", {
+            onClick: onRename,
+            title: "Click to rename this project",
+            className: "group flex min-w-0 items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-slate-800/60",
+            children: [/*#__PURE__*/_jsx("span", {
+              className: "truncate text-sm font-bold text-white",
+              children: project.name
+            }), /*#__PURE__*/_jsx(Icon, {
+              name: "Pencil",
+              size: 12,
+              className: "shrink-0 text-slate-500 transition-colors group-hover:text-cyan-300"
+            })]
+          }), /*#__PURE__*/_jsx(TypeBadge, {
+            type: project.type,
+            className: "hidden lg:inline-flex"
+          })]
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "ml-auto flex flex-wrap items-center gap-2",
+          children: [/*#__PURE__*/_jsx(Badge, {
+            tone: dirty ? 'amber' : 'emerald',
+            icon: dirty ? 'CircleDot' : 'CheckCircle2',
+            children: dirty ? 'Unsaved changes' : 'Saved ' + fmtRelative(savedAt)
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "Save",
+            onClick: saveNow,
+            children: "Save"
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "Download",
+            onClick: () => onDownload(project),
+            children: "Download"
+          }), /*#__PURE__*/_jsx(Button, {
+            variant: "ghost",
+            size: "sm",
+            icon: "BookOpen",
+            onClick: () => setHelpOpen(true),
+            children: "Help"
+          }), /*#__PURE__*/_jsxs("button", {
+            onClick: onSpinUp,
+            className: "group relative inline-flex items-center gap-2 overflow-hidden rounded-xl border border-emerald-400/40 bg-gradient-to-r from-emerald-500/20 via-cyan-500/20 to-emerald-500/20 px-4 py-2.5 text-sm font-bold text-emerald-200 transition-all duration-300 hover:-translate-y-0.5 hover:border-emerald-300/70 hover:text-white animate-pulse-ring",
+            children: [/*#__PURE__*/_jsx("span", {
+              className: "absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/15 to-transparent transition-transform duration-700 group-hover:translate-x-full"
+            }), /*#__PURE__*/_jsx("span", {
+              className: "relative text-base leading-none",
+              children: "🚀"
+            }), /*#__PURE__*/_jsx("span", {
+              className: "relative whitespace-nowrap",
+              children: "Spin Up Tunnel Server"
+            })]
+          })]
+        })]
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "flex flex-wrap items-center gap-2 border-t border-slate-800/60 bg-slate-950/50 px-4 py-2",
+        children: [/*#__PURE__*/_jsx("span", {
+          className: "text-[10.5px] font-bold uppercase tracking-[.14em] text-slate-500",
+          children: "Layout"
+        }), layoutBtn('columns', 'Columns', 'Columns', 'HTML / CSS / JS side by side'), layoutBtn('tabs', 'LayoutPanelTop', 'Tabs', 'One consolidated pane with tabs'), layoutBtn('preview-only', 'MonitorPlay', 'Preview', 'Full-width live preview'), /*#__PURE__*/_jsx("div", {
+          className: "mx-1 hidden h-5 w-px bg-slate-800 sm:block"
+        }), /*#__PURE__*/_jsxs("button", {
+          onClick: () => setPreviewOn(v => !v),
+          className: cx('inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-all duration-200', previewOn ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-200' : 'border-slate-800/70 bg-slate-900/60 text-slate-400 hover:text-slate-200'),
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: previewOn ? 'Eye' : 'EyeOff',
+            size: 12
+          }), "Live preview"]
+        }), /*#__PURE__*/_jsxs("button", {
+          onClick: () => setPreviewKey(k => k + 1),
+          title: "Re-run the preview document",
+          className: "inline-flex items-center gap-1.5 rounded-lg border border-slate-800/70 bg-slate-900/60 px-2.5 py-1.5 text-[11px] font-semibold text-slate-400 transition-colors hover:text-cyan-200",
+          children: [/*#__PURE__*/_jsx(Icon, {
+            name: "RefreshCw",
+            size: 12
+          }), "Reload"]
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "ml-auto flex items-center gap-2 font-mono text-[10.5px] text-slate-500",
+          children: [/*#__PURE__*/_jsx("span", {
+            className: "hidden sm:inline",
+            children: "Ctrl/⌘ + S save"
+          }), /*#__PURE__*/_jsx("span", {
+            className: "hidden md:inline",
+            children: "· ⌘ + Enter tunnel"
+          }), /*#__PURE__*/_jsx("span", {
+            className: "hidden lg:inline",
+            children: "· ⌘ + B layout"
+          })]
+        })]
+      })]
+    }), /*#__PURE__*/_jsxs("div", {
+      className: "flex min-h-0 flex-1 flex-col gap-2 p-2 lg:flex-row",
+      children: [layout === 'preview-only' ? null : layout === 'tabs' ? /*#__PURE__*/_jsxs("div", {
+        className: "flex min-h-0 flex-1 flex-col gap-2",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: "flex shrink-0 items-center gap-1.5",
+          children: panes.map(p => /*#__PURE__*/_jsxs("button", {
+            onClick: () => setActiveTab(p.key),
+            className: cx('inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-bold transition-all duration-200', activeTab === p.key ? p.tone === 'cyan' ? 'border-cyan-500/60 bg-cyan-500/15 text-cyan-200' : p.tone === 'violet' ? 'border-violet-500/60 bg-violet-500/15 text-violet-200' : 'border-amber-500/60 bg-amber-500/15 text-amber-200' : 'border-slate-800/70 bg-slate-900/60 text-slate-400 hover:text-slate-200'),
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: p.icon,
+              size: 12
+            }), p.label]
+          }, p.key))
+        }), panes.filter(p => p.key === activeTab).map(p => /*#__PURE__*/_jsx(CodePane, {
+          pane: p,
+          layout: layout,
+          wrap: wrap,
+          onToggleWrap: () => setWrap(v => !v),
+          value: files[p.key] || '',
+          onChange: v => setPane(p.key, v),
+          onClear: () => clearPane(p.key),
+          onRemoveTemplate: () => removeTemplate(p.key)
+        }, p.key))]
+      }) : /*#__PURE__*/_jsx("div", {
+        className: "flex min-h-0 flex-1 flex-col gap-2 xl:flex-row",
+        children: panes.map(p => /*#__PURE__*/_jsx(CodePane, {
+          pane: p,
+          layout: layout,
+          wrap: wrap,
+          onToggleWrap: () => setWrap(v => !v),
+          value: files[p.key] || '',
+          onChange: v => setPane(p.key, v),
+          onClear: () => clearPane(p.key),
+          onRemoveTemplate: () => removeTemplate(p.key)
+        }, p.key))
+      }), previewOn ? /*#__PURE__*/_jsxs("section", {
+        className: "flex min-h-[280px] min-w-0 flex-col overflow-hidden rounded-xl border border-slate-800/60 bg-slate-900/70 backdrop-blur-md lg:w-[38%] lg:min-w-[320px]",
+        children: [/*#__PURE__*/_jsxs("header", {
+          className: "flex shrink-0 items-center gap-2 border-b border-slate-800/60 bg-slate-950/60 px-3 py-2",
+          children: [/*#__PURE__*/_jsx("span", {
+            className: "grid h-6 w-6 place-items-center rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
+            children: /*#__PURE__*/_jsx(Icon, {
+              name: "MonitorPlay",
+              size: 12
+            })
+          }), /*#__PURE__*/_jsx("span", {
+            className: "text-xs font-bold text-slate-200",
+            children: "Live preview"
+          }), /*#__PURE__*/_jsx(Badge, {
+            tone: "slate",
+            className: "ml-1 hidden sm:inline-flex",
+            children: bytesFmt(previewDoc.length)
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "ml-auto flex items-center gap-1",
+            children: [/*#__PURE__*/_jsx("span", {
+              className: "hidden text-[10.5px] text-slate-500 md:inline",
+              children: "sandboxed"
+            }), /*#__PURE__*/_jsx("button", {
+              onClick: () => setPreviewKey(k => k + 1),
+              "aria-label": "Reload preview",
+              className: "rounded-md p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200",
+              children: /*#__PURE__*/_jsx(Icon, {
+                name: "RefreshCw",
+                size: 13
+              })
+            }), /*#__PURE__*/_jsx("button", {
+              onClick: () => {
+                setPreviewKey(k => k + 1);
+                onSpinUp();
+              },
+              "aria-label": "Open in tunnel",
+              className: "rounded-md p-1.5 text-slate-500 transition-colors hover:bg-emerald-500/15 hover:text-emerald-300",
+              children: /*#__PURE__*/_jsx(Icon, {
+                name: "ExternalLink",
+                size: 13
+              })
+            })]
+          })]
+        }), /*#__PURE__*/_jsx("div", {
+          className: "relative min-h-0 flex-1 bg-white",
+          children: /*#__PURE__*/_jsx("iframe", {
+            title: "Project preview",
+            srcDoc: debouncedDoc,
+            sandbox: "allow-scripts allow-modals allow-forms allow-popups allow-downloads allow-same-origin",
+            className: "h-full w-full border-0"
+          }, previewKey)
+        }), /*#__PURE__*/_jsx("footer", {
+          className: "shrink-0 border-t border-slate-800/60 bg-slate-950/50 px-3 py-1.5 text-[10.5px] text-slate-500",
+          children: "Sandboxed inline preview. Use the tunnel for WebRTC, camera, microphone and device APIs."
+        })]
+      }) : null]
+    }), /*#__PURE__*/_jsx(HelpModal, {
+      open: helpOpen,
+      onClose: () => setHelpOpen(false),
+      project: project
+    })]
+  });
+}
+
+/* ── HELP / SETTINGS MODAL ─────────────────────────────────────────────── */
+function HelpModal({
+  open,
+  onClose,
+  project,
+  swInfo,
+  onReRegister,
+  onExport,
+  onImport
+}) {
+  const [tab, setTab] = useState('shortcuts');
+  const fileRef = useRef(null);
+  const shortcuts = [['Ctrl / ⌘ + S', 'Save every pane to LocalStorage'], ['Ctrl / ⌘ + Enter', 'Spin up the Browser Tunnel immediately'], ['Ctrl / ⌘ + P', 'Toggle the live preview panel'], ['Ctrl / ⌘ + B', 'Cycle layout: Columns → Tabs → Preview'], ['Tab (in editor)', 'Insert a two-space indent'], ['Enter (in editor)', 'Keep the current line indentation']];
+  const swTone = swInfo && (swInfo.state === 'controlling' || swInfo.state === 'active') ? 'emerald' : 'amber';
+  return /*#__PURE__*/_jsxs(Modal, {
+    open: open,
+    onClose: onClose,
+    size: "lg",
+    labelledBy: "nx-help-title",
+    children: [/*#__PURE__*/_jsx(ModalHeader, {
+      icon: "BookOpen",
+      title: "Workspace help",
+      tone: "violet",
+      onClose: onClose,
+      subtitle: project ? 'Editing ' + project.name : 'Shortcuts, storage and the tunnel router'
+    }), /*#__PURE__*/_jsx("div", {
+      className: "flex shrink-0 gap-1 border-b border-slate-800/70 bg-slate-950/40 px-6 py-3",
+      children: [['shortcuts', 'Shortcuts', 'Keyboard'], ['tunnel', 'Tunnel', 'RadioTower'], ['storage', 'Storage', 'Database']].map(([k, label, icon]) => /*#__PURE__*/_jsxs("button", {
+        onClick: () => setTab(k),
+        className: cx('inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-all duration-200', tab === k ? 'border-violet-500/60 bg-violet-500/15 text-violet-200' : 'border-slate-800/70 bg-slate-900/60 text-slate-400 hover:text-slate-200'),
+        children: [/*#__PURE__*/_jsx(Icon, {
+          name: icon,
+          size: 12
+        }), label]
+      }, k))
+    }), /*#__PURE__*/_jsx("div", {
+      className: "nx-scroll flex-1 overflow-y-auto px-6 py-6",
+      children: tab === 'shortcuts' ? /*#__PURE__*/_jsx("div", {
+        className: "overflow-hidden rounded-2xl border border-slate-800/70",
+        children: shortcuts.map(([k, v], i) => /*#__PURE__*/_jsxs("div", {
+          className: cx('flex flex-wrap items-center gap-3 px-4 py-3 text-xs', i % 2 ? 'bg-slate-950/40' : 'bg-slate-900/40'),
+          children: [/*#__PURE__*/_jsx("kbd", {
+            className: "rounded-md border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-[11px] text-cyan-300",
+            children: k
+          }), /*#__PURE__*/_jsx("span", {
+            className: "text-slate-300",
+            children: v
+          })]
+        }, k))
+      }) : tab === 'tunnel' ? /*#__PURE__*/_jsxs("div", {
+        className: "space-y-4",
+        children: [/*#__PURE__*/_jsxs("div", {
+          className: "rounded-2xl border border-slate-800/70 bg-slate-950/50 p-5",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "flex items-center justify-between gap-3",
+            children: [/*#__PURE__*/_jsxs("div", {
+              className: "flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400",
+              children: [/*#__PURE__*/_jsx(Icon, {
+                name: "Cpu",
+                size: 13
+              }), " Service Worker router"]
+            }), /*#__PURE__*/_jsx(Badge, {
+              tone: swTone,
+              icon: swTone === 'emerald' ? 'ShieldCheck' : 'ShieldAlert',
+              children: swInfo ? swInfo.state : 'unknown'
+            })]
+          }), /*#__PURE__*/_jsx("dl", {
+            className: "mt-4 space-y-2 text-xs",
+            children: [['API support', swInfo && swInfo.supported ? 'available' : 'unavailable'], ['Secure context', swInfo && swInfo.secure ? 'yes (https / localhost)' : 'no — tunnel falls back to client-side decode'], ['Scope', swInfo && swInfo.scope ? swInfo.scope : '—'], ['Script', swInfo && swInfo.script ? swInfo.script : '—'], ['Controller', swInfo && swInfo.controlled ? 'attached' : 'not yet attached (reload once)']].map(([k, v]) => /*#__PURE__*/_jsxs("div", {
+              className: "flex flex-wrap justify-between gap-3 border-b border-slate-800/50 pb-2 last:border-0",
+              children: [/*#__PURE__*/_jsx("dt", {
+                className: "text-slate-500",
+                children: k
+              }), /*#__PURE__*/_jsx("dd", {
+                className: "break-all font-mono text-slate-300",
+                children: v
+              })]
+            }, k))
+          }), swInfo && swInfo.error ? /*#__PURE__*/_jsx("p", {
+            className: "mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200",
+            children: swInfo.error
+          }) : null, /*#__PURE__*/_jsxs("div", {
+            className: "mt-4 flex flex-wrap gap-2",
+            children: [/*#__PURE__*/_jsx(Button, {
+              variant: "outline",
+              size: "sm",
+              icon: "RefreshCw",
+              onClick: onReRegister,
+              children: "Re-register router"
+            }), /*#__PURE__*/_jsx(Button, {
+              variant: "ghost",
+              size: "sm",
+              icon: "ExternalLink",
+              onClick: () => window.open(SWBridge.swUrl(), '_blank', 'noopener'),
+              children: "Inspect sw.js"
+            })]
+          })]
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "rounded-2xl border border-slate-800/70 bg-slate-950/50 p-5 text-xs leading-relaxed text-slate-400",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "mb-2 flex items-center gap-2 font-bold uppercase tracking-[.14em] text-slate-400",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Wifi",
+              size: 13
+            }), " Why no iframe"]
+          }), "An iframe is a nested browsing context: it inherits a restrictive permissions policy, often blocks", /*#__PURE__*/_jsx("span", {
+            className: "font-mono text-cyan-300",
+            children: " getUserMedia"
+          }), ", and can break peer connections. The tunnel instead has the Service Worker answer the navigation request with your code, so the browser treats it as the page's own document — the same environment as any hand-written website."]
+        })]
+      }) : /*#__PURE__*/_jsxs("div", {
+        className: "space-y-4",
+        children: [/*#__PURE__*/_jsxs("div", {
+          className: "rounded-2xl border border-slate-800/70 bg-slate-950/50 p-5",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "flex items-center gap-2 text-xs font-bold uppercase tracking-[.14em] text-slate-400",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Database",
+              size: 13
+            }), " LocalStorage"]
+          }), /*#__PURE__*/_jsxs("p", {
+            className: "mt-3 text-xs leading-relaxed text-slate-400",
+            children: ["Every project, file body and preference lives in this browser's LocalStorage under the", /*#__PURE__*/_jsx("span", {
+              className: "font-mono text-cyan-300",
+              children: " nexus.ide.*"
+            }), " namespace. Nothing is transmitted anywhere. Writes are wrapped in quota detection — if the browser storage limit is hit you get a clear warning instead of silent data loss."]
+          }), /*#__PURE__*/_jsxs("div", {
+            className: "mt-4 flex flex-wrap gap-2",
+            children: [/*#__PURE__*/_jsx(Button, {
+              variant: "outline",
+              size: "sm",
+              icon: "DownloadCloud",
+              onClick: onExport,
+              children: "Export workspace backup"
+            }), /*#__PURE__*/_jsx(Button, {
+              variant: "ghost",
+              size: "sm",
+              icon: "Upload",
+              onClick: () => fileRef.current && fileRef.current.click(),
+              children: "Import backup"
+            }), /*#__PURE__*/_jsx("input", {
+              ref: fileRef,
+              type: "file",
+              accept: ".json",
+              className: "hidden",
+              onChange: e => {
+                const f = e.target.files && e.target.files[0];
+                if (f) onImport(f);
+              }
+            })]
+          })]
+        }), /*#__PURE__*/_jsxs("div", {
+          className: "rounded-2xl border border-slate-800/70 bg-slate-950/50 p-5 text-xs leading-relaxed text-slate-400",
+          children: [/*#__PURE__*/_jsxs("div", {
+            className: "mb-2 flex items-center gap-2 font-bold uppercase tracking-[.14em] text-slate-400",
+            children: [/*#__PURE__*/_jsx(Icon, {
+              name: "Info",
+              size: 13
+            }), " Tunnel link lifecycle"]
+          }), "Tunnel URLs embed an expiry timestamp set 15 minutes ahead. The worker rejects the request once that moment passes, and the payload page re-checks it before rendering. Revoking a tunnel records its id in IndexedDB, which the worker reads on every request — so a killed link stays dead even after a full reload."]
+        })]
+      })
+    }), /*#__PURE__*/_jsx("div", {
+      className: "flex justify-end border-t border-slate-800/70 bg-slate-950/40 px-6 py-4",
+      children: /*#__PURE__*/_jsx(Button, {
+        variant: "ghost",
+        size: "sm",
+        icon: "X",
+        onClick: onClose,
+        children: "Close"
+      })
+    })]
+  });
+}
+
+/* ── RENAME MODAL ──────────────────────────────────────────────────────── */
+function RenameModal({
+  target,
+  onClose,
+  onSubmit
+}) {
+  const [value, setValue] = useState('');
+  const [error, setError] = useState('');
+  useEffect(() => {
+    if (target) {
+      setValue(target.name);
+      setError('');
+    }
+  }, [target]);
+  const submit = () => {
+    const v = value.trim();
+    if (!v) {
+      setError('A project needs a name.');
+      return;
+    }
+    if (v.length > 64) {
+      setError('Keep it under 64 characters.');
+      return;
+    }
+    onSubmit(v);
+  };
+  return /*#__PURE__*/_jsx(Modal, {
+    open: !!target,
+    onClose: onClose,
+    size: "sm",
+    labelledBy: "nx-rename-title",
+    children: target ? /*#__PURE__*/_jsxs(_Fragment, {
+      children: [/*#__PURE__*/_jsx(ModalHeader, {
+        icon: "Pencil",
+        title: "Rename project",
+        tone: "violet",
+        onClose: onClose,
+        subtitle: "Updates the dashboard card, workspace header and tunnel payload."
+      }), /*#__PURE__*/_jsx("div", {
+        className: "px-6 py-5",
+        children: /*#__PURE__*/_jsx(Field, {
+          label: "Project name",
+          icon: "Type",
+          error: error,
+          children: /*#__PURE__*/_jsx("input", {
+            type: "text",
+            className: inputClass,
+            autoFocus: true,
+            maxLength: 64,
+            value: value,
+            onChange: e => {
+              setValue(e.target.value);
+              if (error) setError('');
+            },
+            onKeyDown: e => {
+              if (e.key === 'Enter') submit();
+            }
+          })
+        })
+      }), /*#__PURE__*/_jsxs("div", {
+        className: "flex justify-end gap-2 border-t border-slate-800/70 bg-slate-950/40 px-6 py-4",
+        children: [/*#__PURE__*/_jsx(Button, {
+          variant: "ghost",
+          size: "sm",
+          onClick: onClose,
+          children: "Cancel"
+        }), /*#__PURE__*/_jsx(Button, {
+          variant: "primary",
+          size: "sm",
+          icon: "Check",
+          onClick: submit,
+          children: "Save name"
+        })]
+      })]
+    }) : null
+  });
+}
+/* ═══════════════════════════════════════════════════════════════════════════
+   NEXUS IDE — APP SHELL, PERSISTENCE, BOOT SEQUENCE
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+function useToasts() {
+  const [toasts, setToasts] = useState([]);
+  const dismiss = useCallback(id => setToasts(list => list.filter(t => t.id !== id)), []);
+  const toast = useCallback((tone, message, title) => {
+    const id = uid('tst');
+    setToasts(list => [...list.slice(-4), {
+      id,
+      tone,
+      message,
+      title
+    }]);
+    setTimeout(() => setToasts(list => list.filter(t => t.id !== id)), tone === 'error' ? 8000 : 4200);
+  }, []);
+  return {
+    toasts,
+    toast,
+    dismiss
+  };
+}
+function App() {
+  const {
+    toasts,
+    toast,
+    dismiss
+  } = useToasts();
+  const [projects, setProjects] = useState([]);
+  const [prefs, setPrefs] = useState({});
+  const [tunnels, setTunnels] = useState([]);
+  const [revoked, setRevoked] = useState([]);
+  const [storageWarning, setStorageWarning] = useState('');
+  const [view, setView] = useState('dashboard');
+  const [activeId, setActiveId] = useState(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [renameTarget, setRenameTarget] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [tunnel, setTunnel] = useState(null);
+  const [tunnelOpen, setTunnelOpen] = useState(false);
+  const [building, setBuilding] = useState(false);
+  const [swInfo, setSwInfo] = useState({
+    supported: SWBridge.supported,
+    secure: SWBridge.secure,
+    state: SWBridge.supported ? 'pending' : SWBridge.secure ? 'unsupported' : 'insecure',
+    scope: SWBridge.scopeUrl(),
+    script: SWBridge.swUrl(),
+    controlled: false,
+    error: ''
+  });
+  const hydrated = useRef(false);
+
+  /* ── hydrate from LocalStorage ─────────────────────────────────────── */
+  useEffect(() => {
+    Storage.probe();
+    if (!Storage.available) {
+      setStorageWarning(Storage.reason);
+    } else {
+      const rawProjects = Storage.read(K_PROJECTS, null);
+      if (Array.isArray(rawProjects)) {
+        const clean = rawProjects.filter(p => p && typeof p === 'object' && p.id && p.files).map(p => ({
+          ...p,
+          type: p.type === 'split' ? 'split' : 'single',
+          createdAt: p.createdAt || Date.now(),
+          updatedAt: p.updatedAt || p.createdAt || Date.now(),
+          files: {
+            html: typeof p.files.html === 'string' ? p.files.html : '',
+            css: typeof p.files.css === 'string' ? p.files.css : '',
+            js: typeof p.files.js === 'string' ? p.files.js : ''
+          }
+        }));
+        setProjects(clean);
+        if (clean.length !== rawProjects.length) {
+          setStorageWarning('Some stored project records were unreadable and have been skipped. The rest loaded normally.');
+        }
+      }
+      const rawPrefs = Storage.read(K_PREFS, null);
+      if (rawPrefs && typeof rawPrefs === 'object') setPrefs(rawPrefs);
+      const rawTunnels = Storage.read(K_TUNNELS, null);
+      if (Array.isArray(rawTunnels)) setTunnels(rawTunnels);
+      const rawRevoked = Storage.read(K_REVOKED, null);
+      if (Array.isArray(rawRevoked)) setRevoked(rawRevoked);
+    }
+    hydrated.current = true;
+  }, []);
+
+  /* ── persist projects ──────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!hydrated.current) return;
+    const res = Storage.write(K_PROJECTS, projects);
+    if (!res.ok) {
+      setStorageWarning(res.message);
+    } else if (storageWarning && !Storage.available === false) {
+      setStorageWarning('');
+    }
+  }, [projects]);
+  useEffect(() => {
+    if (hydrated.current) Storage.write(K_PREFS, prefs);
+  }, [prefs]);
+  useEffect(() => {
+    if (hydrated.current) Storage.write(K_TUNNELS, tunnels);
+  }, [tunnels]);
+  useEffect(() => {
+    if (!hydrated.current) return;
+    Storage.write(K_REVOKED, revoked);
+    /* mirror revocations into IndexedDB so the Service Worker can enforce them */
+    writeRevokedToIdb(revoked);
+    SWBridge.post({
+      type: 'NEXUS_SYNC_REVOKED',
+      ids: revoked
+    });
+  }, [revoked]);
+
+  /* ── service worker boot ───────────────────────────────────────────── */
+  const registerRouter = useCallback(async () => {
+    setSwInfo(s => ({
+      ...s,
+      state: 'registering',
+      error: ''
+    }));
+    const reg = await SWBridge.register();
+    setSwInfo({
+      supported: SWBridge.supported,
+      secure: SWBridge.secure,
+      state: SWBridge.state,
+      scope: SWBridge.scopeUrl(),
+      script: SWBridge.swUrl(),
+      controlled: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+      error: SWBridge.error
+    });
+    return reg;
+  }, []);
+  useEffect(() => {
+    registerRouter().then(reg => {
+      if (!reg) return;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        setSwInfo(s => ({
+          ...s,
+          controlled: true,
+          state: 'controlling'
+        }));
+      });
+    }).catch(() => {/* state already captured in swInfo */});
+  }, [registerRouter]);
+  const activeProject = useMemo(() => projects.find(p => p.id === activeId) || null, [projects, activeId]);
+
+  /* ── project operations ────────────────────────────────────────────── */
+  const createProject = (name, type, seed, importedName) => {
+    const p = makeProject(name, type, seed);
+    setProjects(list => [p, ...list]);
+    setNewOpen(false);
+    setActiveId(p.id);
+    setView('workspace');
+    toast('success', importedName ? 'Imported ' + importedName + ' into "' + p.name + '"' : 'Project "' + p.name + '" created', type === 'single' ? 'Single unified HTML document.' : 'Split HTML / CSS / JS workspace.');
+  };
+  const updateProject = (id, patch, opts) => {
+    setProjects(list => list.map(p => p.id === id ? {
+      ...p,
+      ...patch,
+      updatedAt: patch.updatedAt || Date.now()
+    } : p));
+    if (!opts || !opts.silent) {/* explicit saves are announced by the caller */}
+  };
+  const renameProject = (id, name) => {
+    setProjects(list => list.map(p => p.id === id ? {
+      ...p,
+      name,
+      updatedAt: Date.now()
+    } : p));
+    toast('success', 'Renamed to "' + name + '"', 'The tunnel payload name updates on the next spin-up.');
+  };
+  const duplicateProject = project => {
+    const copy = {
+      ...project,
+      id: uid('prj'),
+      name: project.name + ' (copy)',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      files: {
+        ...project.files
+      }
+    };
+    setProjects(list => {
+      const i = list.findIndex(p => p.id === project.id);
+      const next = list.slice();
+      next.splice(i + 1, 0, copy);
+      return next;
+    });
+    toast('info', 'Duplicated "' + project.name + '"', 'An independent copy now sits beside the original.');
+  };
+  const deleteProject = project => {
+    setConfirmState({
+      icon: 'Trash2',
+      tone: 'rose',
+      title: 'Delete "' + project.name + '"?',
+      subtitle: 'This cannot be undone.',
+      body: /*#__PURE__*/_jsx("span", {
+        children: "Every pane of this project is erased from LocalStorage immediately. Download it first if you may want it back."
+      }),
+      confirmLabel: 'Delete project',
+      onConfirm: () => {
+        setProjects(list => list.filter(p => p.id !== project.id));
+        if (activeId === project.id) {
+          setActiveId(null);
+          setView('dashboard');
+        }
+        setConfirmState(null);
+        toast('warn', 'Project deleted', '"' + project.name + '" was removed from this browser.');
+      }
+    });
+  };
+  const resetWorkspace = () => {
+    setConfirmState({
+      icon: 'AlertTriangle',
+      tone: 'rose',
+      title: 'Reset the entire workspace?',
+      subtitle: projects.length + ' project(s) will be erased.',
+      body: /*#__PURE__*/_jsx("span", {
+        children: "This wipes every project, every pane and all tunnel history stored in this browser. Export a backup first if you need one."
+      }),
+      confirmLabel: 'Erase everything',
+      onConfirm: () => {
+        setProjects([]);
+        setTunnels([]);
+        setRevoked([]);
+        Storage.remove(K_PROJECTS);
+        Storage.remove(K_TUNNELS);
+        Storage.remove(K_REVOKED);
+        setConfirmState(null);
+        setView('dashboard');
+        setActiveId(null);
+        toast('warn', 'Workspace reset', 'All projects were erased from this browser.');
+      }
+    });
+  };
+  const exportWorkspace = () => {
+    const payload = {
+      app: APP.name,
+      version: APP.version,
+      exportedAt: new Date().toISOString(),
+      projects,
+      tunnels: tunnels.slice(0, 30)
+    };
+    try {
+      triggerDownload(new Blob([JSON.stringify(payload, null, 2)], {
+        type: 'application/json'
+      }), 'nexus-workspace-' + new Date().toISOString().slice(0, 10) + '.json');
+      toast('success', 'Backup exported', projects.length + ' project(s) written to a JSON file.');
+    } catch (e) {
+      toast('error', 'Export failed: ' + String(e && e.message || e));
+    }
+  };
+  const importWorkspace = file => {
+    const reader = new FileReader();
+    reader.onerror = () => toast('error', 'Could not read that backup file.');
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result || '{}'));
+        const incoming = Array.isArray(data.projects) ? data.projects : [];
+        if (!incoming.length) {
+          toast('warn', 'Nothing to import', 'That backup contains no projects.');
+          return;
+        }
+        const existing = new Set(projects.map(p => p.id));
+        const merged = incoming.filter(p => p && p.id && p.files).map(p => existing.has(p.id) ? {
+          ...p,
+          id: uid('prj'),
+          name: p.name + ' (imported)'
+        } : p);
+        setProjects(list => [...merged, ...list]);
+        toast('success', 'Imported ' + merged.length + ' project(s)', 'Duplicate ids were given fresh identities.');
+      } catch (e) {
+        toast('error', 'Invalid backup file', 'Expected a JSON export produced by this app.');
+      }
+    };
+    reader.readAsText(file);
+  };
+  const handleDownload = project => {
+    try {
+      const r = downloadProject(project);
+      toast('success', 'Packaged as ' + r.filename, r.kind === 'zip' ? 'ZIP contains index.html, style.css, script.js plus a compiled dist/index.html.' : r.kind === 'html-fallback' ? 'ZIP library was unavailable, so a single compiled document was delivered instead.' : 'Clean standalone HTML document.');
+    } catch (e) {
+      toast('error', 'Download failed', String(e && e.message || e));
+    }
+  };
+
+  /* ── tunnel operations ─────────────────────────────────────────────── */
+  const spinUp = useCallback(project => {
+    const target = project || activeProject;
+    if (!target) {
+      toast('warn', 'No project selected', 'Open a project before spinning up a tunnel.');
+      return;
+    }
+    setBuilding(true);
+    setTimeout(() => {
+      const result = buildTunnel(target);
+      if (!result.ok) {
+        setTunnel({
+          state: 'error',
+          error: result.error,
+          url: '',
+          id: uid('tun'),
+          exp: 0,
+          docBytes: 0,
+          payloadChars: 0,
+          urlLength: 0,
+          ratio: 0
+        });
+      } else {
+        setTunnel({
+          ...result,
+          state: 'active',
+          projectId: target.id,
+          projectName: target.name,
+          createdAt: Date.now()
+        });
+        setTunnels(list => [{
+          id: result.id,
+          projectId: target.id,
+          projectName: target.name,
+          createdAt: Date.now(),
+          exp: result.exp,
+          urlLength: result.urlLength,
+          docBytes: result.docBytes
+        }, ...list].slice(0, 30));
+        toast('success', 'Tunnel server live', 'Link active for 15:00 · ' + bytesFmt(result.docBytes) + ' packed to ' + result.payloadChars.toLocaleString() + ' characters.');
+      }
+      setBuilding(false);
+      setTunnelOpen(true);
+    }, 420);
+  }, [activeProject, toast]);
+  const revokeTunnel = () => {
+    if (!tunnel) return;
+    const id = tunnel.id;
+    setTunnel(t => ({
+      ...t,
+      state: 'revoked'
+    }));
+    setRevoked(list => list.indexOf(id) === -1 ? [...list, id].slice(-200) : list);
+    SWBridge.post({
+      type: 'NEXUS_REVOKE',
+      id
+    });
+    toast('warn', 'Tunnel revoked', 'Anyone opening that link now receives a revoked notice.');
+  };
+  const openTunnelLink = () => {
+    if (!tunnel || !tunnel.url) return;
+    const w = window.open(tunnel.url, '_blank', 'noopener,noreferrer');
+    if (!w) toast('warn', 'Popup blocked', 'Allow popups for this page, or copy the link and paste it into a new tab.');
+  };
+  const copyTunnelLink = ok => {
+    if (ok) toast('success', 'Link copied', 'Paste it into any tab — the router will unpack it in memory.');else toast('error', 'Clipboard blocked', 'Select the URL field and copy it manually.');
+  };
+
+  /* ── global keyboard: new project ──────────────────────────────────── */
+  useEffect(() => {
+    const onKey = e => {
+      const mod = e.metaKey || e.ctrlKey;
+      if (mod && e.shiftKey && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setNewOpen(true);
+      }
+      if (e.key === 'Escape' && building) setBuilding(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [building]);
+
+  /* ── render ────────────────────────────────────────────────────────── */
+  return /*#__PURE__*/_jsxs("div", {
+    className: "flex h-full min-h-0 flex-col",
+    children: [view === 'workspace' && activeProject ? /*#__PURE__*/_jsx(Workspace, {
+      project: activeProject,
+      onBack: () => {
+        setView('dashboard');
+        setActiveId(null);
+      },
+      onUpdate: (patch, opts) => updateProject(activeProject.id, patch, opts),
+      onDownload: handleDownload,
+      onSpinUp: () => spinUp(activeProject),
+      onRename: () => setRenameTarget(activeProject),
+      toast: toast
+    }, activeProject.id) : /*#__PURE__*/_jsx(Dashboard, {
+      projects: projects,
+      swState: swInfo.state,
+      storageWarning: storageWarning,
+      onNew: () => setNewOpen(true),
+      onOpen: p => {
+        setActiveId(p.id);
+        setView('workspace');
+      },
+      onRename: p => setRenameTarget(p),
+      onDownload: handleDownload,
+      onDelete: deleteProject,
+      onDuplicate: duplicateProject,
+      onResetAll: resetWorkspace
+    }), /*#__PURE__*/_jsx(NewProjectModal, {
+      open: newOpen,
+      onClose: () => setNewOpen(false),
+      onCreate: createProject
+    }), /*#__PURE__*/_jsx(RenameModal, {
+      target: renameTarget,
+      onClose: () => setRenameTarget(null),
+      onSubmit: name => {
+        if (renameTarget) renameProject(renameTarget.id, name);
+        setRenameTarget(null);
+      }
+    }), /*#__PURE__*/_jsx(TunnelModal, {
+      open: tunnelOpen,
+      onClose: () => setTunnelOpen(false),
+      tunnel: tunnel,
+      project: activeProject,
+      onRevoke: revokeTunnel,
+      onRecreate: () => spinUp(activeProject),
+      onOpenLink: openTunnelLink,
+      onCopy: copyTunnelLink
+    }), /*#__PURE__*/_jsx(HelpModal, {
+      open: helpOpen,
+      onClose: () => setHelpOpen(false),
+      project: null,
+      swInfo: swInfo,
+      onReRegister: () => {
+        registerRouter();
+        toast('info', 'Router re-registered', 'sw.js was re-fetched with updateViaCache disabled.');
+      },
+      onExport: exportWorkspace,
+      onImport: importWorkspace
+    }), /*#__PURE__*/_jsx(ConfirmDialog, {
+      state: confirmState,
+      onCancel: () => setConfirmState(null),
+      onConfirm: () => {}
+    }), building ? /*#__PURE__*/_jsx("div", {
+      className: "fixed inset-0 z-[90] grid place-items-center bg-slate-950/80 backdrop-blur-md animate-fade-in",
+      children: /*#__PURE__*/_jsxs("div", {
+        className: "w-[min(92vw,380px)] rounded-2xl border border-emerald-500/30 bg-slate-900/90 p-7 text-center",
+        children: [/*#__PURE__*/_jsx("div", {
+          className: "mx-auto grid h-14 w-14 place-items-center rounded-2xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
+          children: /*#__PURE__*/_jsx(Icon, {
+            name: "RadioTower",
+            size: 24,
+            className: "nx-spin"
+          })
+        }), /*#__PURE__*/_jsx("h3", {
+          className: "mt-4 text-sm font-bold text-white",
+          children: "Compressing payload…"
+        }), /*#__PURE__*/_jsx("p", {
+          className: "mt-1.5 text-xs text-slate-400",
+          children: "Packing panes into a self-expiring URL and warming the router."
+        }), /*#__PURE__*/_jsx("div", {
+          className: "mt-5 h-1 overflow-hidden rounded-full bg-slate-800",
+          children: /*#__PURE__*/_jsx("div", {
+            className: "h-full w-1/2 rounded-full bg-gradient-to-r from-emerald-400 to-cyan-400 animate-shimmer",
+            style: {
+              backgroundSize: '200% 100%'
+            }
+          })
+        })]
+      })
+    }) : null, /*#__PURE__*/_jsx(ToastHost, {
+      toasts: toasts,
+      dismiss: dismiss
+    })]
+  });
+}
+
+/* ── IndexedDB mirror so the Service Worker can enforce revocations ────── */
+function writeRevokedToIdb(ids) {
+  try {
+    if (typeof indexedDB === 'undefined') return;
+    const req = indexedDB.open('nexus-sw', 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains('revoked')) db.createObjectStore('revoked', {
+        keyPath: 'id'
+      });
+    };
+    req.onsuccess = () => {
+      try {
+        const db = req.result;
+        const tx = db.transaction('revoked', 'readwrite');
+        const store = tx.objectStore('revoked');
+        (ids || []).forEach(id => store.put({
+          id,
+          at: Date.now()
+        }));
+        tx.oncomplete = () => db.close();
+      } catch (e) {/* non-fatal: the worker also keeps an in-memory list */}
+    };
+    req.onerror = () => {/* non-fatal */};
+  } catch (e) {/* non-fatal */}
+}
+
+/* ── BOOT ──────────────────────────────────────────────────────────────── */
+(function boot() {
+  window.__NEXUS_BOOTED__ = true;
+  const mount = document.getElementById('root');
+  const fatal = (title, detail, hint) => {
+    if (!mount) return;
+    mount.innerHTML = '';
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'height:100%;display:grid;place-items:center;padding:24px;background:#020617;font-family:ui-sans-serif,system-ui,sans-serif';
+    wrap.innerHTML = '<div style="max-width:620px;border:1px solid rgba(244,63,94,.35);background:rgba(15,23,42,.85);border-radius:18px;padding:28px;color:#e2e8f0">' + '<div style="font-size:30px">⚠️</div>' + '<h1 style="margin:12px 0 6px;font-size:19px">' + title + '</h1>' + '<p style="margin:0 0 14px;font-size:13px;line-height:1.7;color:#94a3b8">' + (hint || '') + '</p>' + '<pre style="margin:0;padding:14px;border-radius:12px;background:#020617;border:1px solid rgba(148,163,184,.16);font-size:11.5px;color:#fda4af;white-space:pre-wrap;overflow:auto;max-height:220px">' + String(detail).replace(/[<>&]/g, c => ({
+      '<': '&lt;',
+      '>': '&gt;',
+      '&': '&amp;'
+    })[c]) + '</pre>' + '<button onclick="location.reload()" style="margin-top:18px;padding:10px 18px;border:0;border-radius:10px;font-weight:600;cursor:pointer;color:#04212b;background:linear-gradient(135deg,#22d3ee,#34d399)">Reload application</button>' + '</div>';
+    mount.appendChild(wrap);
+  };
+  const missing = [];
+  if (!window.React) missing.push('React 18');
+  if (!window.ReactDOM) missing.push('ReactDOM 18');
+  if (!window.Babel) missing.push('Babel Standalone');
+  if (missing.length) {
+    fatal('Runtime libraries failed to load', 'Missing: ' + missing.join(', ') + '\n\nEach library is served from unpkg with a jsDelivr fallback. This normally means the network blocked both CDNs, or an extension (ad/privacy blocker, offline mode) stripped the script tags.', 'Check your connection or content blocker, then reload. The IDE needs these three CDNs the first time it runs; your projects are already stored locally and are not affected.');
+    return;
+  }
+  try {
+    ReactDOM.render(/*#__PURE__*/_jsx(ErrorBoundary, {
+      children: /*#__PURE__*/_jsx(App, {})
+    }), mount);
+  } catch (e) {
+    fatal('The application could not start', e && e.stack || String(e), 'This is usually a syntax error introduced while editing the source. Restore the original file and reload.');
+  }
+})();
+</script>
+
+<script>
+/* Bootstrap watchdog: if the CDN Babel transform has not mounted the app shortly
+   after load, execute the precompiled bundle so the IDE always starts. */
+(function () {
+  function heal() {
+    if (window.__NEXUS_BOOTED__) return;
+    var el = document.getElementById('nexus-compiled');
+    if (!el) return;
+    var code = el.textContent || el.innerText || '';
+    if (!code) return;
+    try { (new Function(code))(); }
+    catch (e) { console.error('[NEXUS] precompiled fallback failed', e); }
+  }
+  window.addEventListener('load', function () { setTimeout(heal, 1500); });
+  setTimeout(heal, 6000);
+})();
 </script>
 </body>
 </html>
