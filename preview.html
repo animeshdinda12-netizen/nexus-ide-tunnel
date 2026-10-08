@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<meta name="robots" content="noindex, nofollow" />
+<title>NEXUS Tunnel · unpacking…</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🚀</text></svg>" />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0; display: grid; place-items: center; padding: 24px;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #e2e8f0; background: #020617;
+    background-image: radial-gradient(900px 460px at 50% -12%, rgba(34,211,238,.16), transparent 62%),
+                      radial-gradient(700px 420px at 92% 6%, rgba(139,92,246,.14), transparent 64%);
+  }
+  .panel {
+    width: min(660px, 94vw); padding: 30px; border-radius: 20px;
+    background: rgba(15, 23, 42, .8); border: 1px solid rgba(148, 163, 184, .18);
+    backdrop-filter: blur(14px); box-shadow: 0 36px 90px -38px rgba(0, 0, 0, .9);
+  }
+  .glyph { font-size: 34px; line-height: 1; }
+  h1 { margin: 14px 0 6px; font-size: 20px; letter-spacing: -.015em; }
+  p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.7; color: #94a3b8; }
+  .row { display: flex; align-items: center; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    border: 1px solid rgba(148,163,184,.22); background: rgba(2,6,23,.6); color: #cbd5e1;
+  }
+  .pill.ok { border-color: rgba(52,211,153,.4); color: #6ee7b7; }
+  .pill.warn { border-color: rgba(251,191,36,.4); color: #fcd34d; }
+  .pill.err { border-color: rgba(244,63,94,.4); color: #fda4af; }
+  code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  pre {
+    margin: 16px 0 0; padding: 14px; border-radius: 12px; background: rgba(2,6,23,.75);
+    border: 1px solid rgba(148,163,184,.14); font-size: 12px; line-height: 1.6;
+    color: #a5f3fc; white-space: pre-wrap; overflow: auto; max-height: 240px;
+  }
+  a.btn, button.btn {
+    display: inline-flex; align-items: center; gap: 8px; border: 0; cursor: pointer; text-decoration: none;
+    padding: 11px 18px; border-radius: 11px; font-weight: 700; font-size: 13px; color: #04212b;
+    background: linear-gradient(135deg, #22d3ee, #34d399);
+    box-shadow: 0 14px 34px -16px rgba(34,211,238,.8); transition: transform .15s ease;
+  }
+  a.btn:hover, button.btn:hover { transform: translateY(-2px); }
+  a.ghost, button.ghost {
+    display: inline-flex; align-items: center; gap: 8px; text-decoration: none; cursor: pointer;
+    padding: 11px 18px; border-radius: 11px; font-weight: 600; font-size: 13px;
+    color: #cbd5e1; background: rgba(30,41,59,.6); border: 1px solid rgba(71,85,105,.7);
+  }
+  .spin {
+    width: 30px; height: 30px; border-radius: 50%;
+    border: 2.5px solid rgba(148,163,184,.25); border-top-color: #22d3ee;
+    animation: sp .85s linear infinite;
+  }
+  @keyframes sp { to { transform: rotate(360deg); } }
+  .bar { margin-top: 18px; height: 4px; border-radius: 999px; background: rgba(30,41,59,.9); overflow: hidden; }
+  .bar > i {
+    display: block; height: 100%; width: 42%; border-radius: 999px;
+    background: linear-gradient(90deg, #22d3ee, #34d399, #22d3ee);
+    background-size: 200% 100%; animation: sh 1.3s linear infinite;
+  }
+  @keyframes sh { from { background-position: 0 0; } to { background-position: 200% 0; } }
+  .meta { margin-top: 16px; display: grid; gap: 8px; }
+  .meta div { display: flex; justify-content: space-between; gap: 14px; font-size: 12px; border-bottom: 1px solid rgba(30,41,59,.7); padding-bottom: 7px; }
+  .meta div:last-child { border-bottom: 0; }
+  .meta span:first-child { color: #64748b; }
+  .meta span:last-child { color: #cbd5e1; text-align: right; word-break: break-all; }
+</style>
+</head>
+<body>
+<div class="panel" id="panel">
+  <div class="spin" id="spinner"></div>
+  <h1>Unpacking tunnel payload…</h1>
+  <p>The Service Worker is assembling your document in memory. If this page lingers, the router is not controlling this
+     navigation yet and the client-side decoder below will take over automatically.</p>
+  <div class="bar"><i></i></div>
+  <div class="row">
+    <span class="pill" id="pill-router">router: checking</span>
+    <span class="pill" id="pill-payload">payload: reading</span>
+  </div>
+</div>
+
+<!-- lz-string is the only dependency: it decodes the ?t= parameter. -->
+<script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script>
+  document.write('<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"><\/script>');
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var K_REVOKED = 'nexus.ide.revoked.v1';
+
+  /* ── escape helpers for the diagnostics block ───────────────────────── */
+  function esc(s) {
+    return String(s).replace(/[<>&]/g, function (c) { return c === '<' ? '&lt;' : c === '>' ? '&gt;' : '&amp;'; });
+  }
+
+  function readRevoked() {
+    try {
+      var raw = localStorage.getItem(K_REVOKED);
+      var list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (e) { return []; }
+  }
+
+  function panel() { return document.getElementById('panel'); }
+
+  /* ── every failure path renders the same styled notice ─────────────── */
+  function notice(opts) {
+    var p = panel();
+    if (!p) return;
+    p.innerHTML =
+      '<div class="glyph">' + opts.glyph + '</div>' +
+      '<h1>' + esc(opts.title) + '</h1>' +
+      '<p>' + opts.body + '</p>' +
+      (opts.meta ? '<div class="meta">' + opts.meta + '</div>' : '') +
+      (opts.detail ? '<pre>' + esc(opts.detail) + '</pre>' : '') +
+      '<div class="row">' +
+        (opts.retry === false ? '' : '<button class="btn" onclick="location.reload()">↻ Retry</button>') +
+        '<a class="ghost" href="./index.html">← Back to NEXUS IDE</a>' +
+      '</div>';
+    document.title = opts.title + ' · NEXUS Tunnel';
+  }
+
+  /* ── read the payload ──────────────────────────────────────────────── */
+  var params = new URLSearchParams(location.search);
+  var payload = params.get('t');
+  var expParam = params.get('e');
+  var idParam = params.get('id');
+  var exp = expParam ? parseInt(expParam, 10) : NaN;
+
+  if (!payload) {
+    notice({
+      glyph: '🛰️', title: 'Nothing to preview',
+      body: 'This page renders a project through the NEXUS Browser Tunnel. Open a project in the IDE and press ' +
+            '<strong>Spin Up Tunnel Server</strong> to generate a link with a payload.',
+      retry: false
+    });
+    return;
+  }
+
+  if (idParam && readRevoked().indexOf(idParam) !== -1) {
+    notice({
+      glyph: '🛑', title: 'This tunnel was revoked',
+      body: 'The author killed this server, so the payload is no longer served. Ask them for a freshly generated link.',
+      retry: false,
+      meta: '<div><span>Tunnel id</span><span class="mono">' + esc(idParam) + '</span></div>'
+    });
+    return;
+  }
+
+  if (isFinite(exp) && Date.now() > exp) {
+    var ago = Math.max(1, Math.round((Date.now() - exp) / 1000));
+    notice({
+      glyph: '⌛', title: 'This tunnel has expired',
+      body: 'Tunnel links are valid for <strong>15 minutes</strong>. This one lapsed ' + ago + ' second' + (ago === 1 ? '' : 's') +
+            ' ago, and the payload is no longer unpacked. Spin up a new server in the IDE for a fresh link.',
+      retry: false,
+      meta:
+        '<div><span>Expired at</span><span class="mono">' + esc(new Date(exp).toLocaleString()) + '</span></div>' +
+        '<div><span>Payload size</span><span class="mono">' + payload.length.toLocaleString() + ' chars</span></div>'
+    });
+    return;
+  }
+
+  if (typeof LZString === 'undefined') {
+    notice({
+      glyph: '📡', title: 'Decoder unavailable',
+      body: 'The lz-string decoder could not be fetched from either CDN, so the payload cannot be expanded. ' +
+            'Reconnect and retry, or reload the IDE and generate the tunnel again.',
+      detail: 'Attempted: unpkg.com/lz-string@1.5.0 then cdn.jsdelivr.net/npm/lz-string@1.5.0'
+    });
+    return;
+  }
+
+  /* ── decode ────────────────────────────────────────────────────────── */
+  var envelope = null;
+  try {
+    var json = LZString.decompressFromEncodedURIComponent(payload);
+    if (!json) throw new Error('The decompressor returned an empty string.');
+    envelope = JSON.parse(json);
+  } catch (e) {
+    notice({
+      glyph: '🧩', title: 'Corrupted tunnel payload',
+      body: 'The <span class="mono">?t=</span> parameter could not be decoded into a project. Links are frequently ' +
+            'truncated when forwarded through chat apps, email clients or link shorteners — those tools break the payload. ' +
+            'Copy the full link straight from the IDE instead.',
+      detail: 'Decode error: ' + String((e && e.message) || e) + '\nPayload length: ' + payload.length.toLocaleString() + ' chars',
+      meta: idParam ? '<div><span>Tunnel id</span><span class="mono">' + esc(idParam) + '</span></div>' : ''
+    });
+    return;
+  }
+
+  if (!envelope || typeof envelope.h !== 'string') {
+    notice({
+      glyph: '🧩', title: 'Payload is missing its document',
+      body: 'The link decoded successfully but contained no HTML body. This usually means a partially truncated payload. ' +
+            'Regenerate the tunnel from the IDE.',
+      detail: 'Decoded keys: ' + esc(Object.keys(envelope || {}).join(', ') || '(none)')
+    });
+    return;
+  }
+
+  if (envelope.e && Date.now() > Number(envelope.e)) {
+    notice({
+      glyph: '⌛', title: 'This tunnel has expired',
+      body: 'The embedded timestamp is in the past, so the document was discarded before it could render.',
+      retry: false,
+      meta: '<div><span>Expired at</span><span class="mono">' + esc(new Date(Number(envelope.e)).toLocaleString()) + '</span></div>'
+    });
+    return;
+  }
+
+  if (envelope.id && readRevoked().indexOf(envelope.id) !== -1) {
+    notice({ glyph: '🛑', title: 'This tunnel was revoked', body: 'The author killed this server.', retry: false });
+    return;
+  }
+
+  /* ── hand the document to the browser as the real page ─────────────── */
+  try {
+    document.title = (envelope.n || 'NEXUS Project') + ' · tunnel';
+    document.open();
+    document.write(envelope.h);
+    document.close();
+  } catch (e) {
+    notice({
+      glyph: '⚠️', title: 'The document could not be rendered',
+      body: 'Decoding succeeded but injecting the document failed. This can happen if the payload contains a malformed ' +
+            'script terminator that truncated the string during transport.',
+      detail: String((e && e.stack) || e)
+    });
+  }
+})();
+</script>
+</body>
+</html>
