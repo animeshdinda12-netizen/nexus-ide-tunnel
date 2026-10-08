@@ -57,7 +57,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script>window.ReactDOM || document.write('<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"><\/script>');</script>
 
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
 <script>window.Babel || document.write('<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"><\/script>');</script>
 
 <script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
@@ -132,7 +132,142 @@
   </div>
 </noscript>
 
-<script type="text/babel" data-presets="react" data-type="module">
+<script type="text/babel" data-presets="react">
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#020617" />
+<meta name="description" content="NEXUS IDE — a backendless, single-file web development studio with a Service Worker Browser Tunnel that serves your project as a real top-level document (no iframes, full WebRTC / PeerJS / device access)." />
+<meta name="author" content="NEXUS IDE" />
+<title>NEXUS IDE · Backendless Studio &amp; Browser Tunnel</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>🚀</text></svg>" />
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     TAILWIND CSS (CDN / JIT) — theme tokens live here
+     ══════════════════════════════════════════════════════════════════════ -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: {
+      extend: {
+        fontFamily: {
+          sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace']
+        },
+        keyframes: {
+          'fade-in': { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+          'pop-in': { '0%': { opacity: '0', transform: 'translateY(10px) scale(.97)' }, '100%': { opacity: '1', transform: 'translateY(0) scale(1)' } },
+          'slide-up': { '0%': { opacity: '0', transform: 'translateY(16px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } },
+          'pulse-ring': { '0%': { boxShadow: '0 0 0 0 rgba(34,211,238,.55)' }, '70%': { boxShadow: '0 0 0 18px rgba(34,211,238,0)' }, '100%': { boxShadow: '0 0 0 0 rgba(34,211,238,0)' } },
+          'scan': { '0%': { transform: 'translateY(-120%)' }, '100%': { transform: 'translateY(520%)' } },
+          'shimmer': { '0%': { backgroundPosition: '-200% 0' }, '100%': { backgroundPosition: '200% 0' } },
+          'float': { '0%,100%': { transform: 'translateY(0)' }, '50%': { transform: 'translateY(-6px)' } }
+        },
+        animation: {
+          'fade-in': 'fade-in .25s ease-out both',
+          'pop-in': 'pop-in .22s cubic-bezier(.2,.9,.3,1.15) both',
+          'slide-up': 'slide-up .32s ease-out both',
+          'pulse-ring': 'pulse-ring 2.1s cubic-bezier(.4,0,.6,1) infinite',
+          'scan': 'scan 3.6s linear infinite',
+          'shimmer': 'shimmer 2.2s linear infinite',
+          'float': 'float 3.4s ease-in-out infinite'
+        }
+      }
+    }
+  };
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     RUNTIME — React 18 + ReactDOM 18 + Babel Standalone + Lucide React
+     Each library carries a secondary CDN fallback (jsDelivr) so a single
+     edge/CDN outage can never leave the IDE half-booted.
+     ══════════════════════════════════════════════════════════════════════ -->
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script>window.React || document.write('<script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"><\/script>');</script>
+
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script>window.ReactDOM || document.write('<script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"><\/script>');</script>
+
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script>window.Babel || document.write('<script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.7/babel.min.js"><\/script>');</script>
+
+<script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.js"></script>
+<script>window.LucideReact || document.write('<script src="https://cdn.jsdelivr.net/npm/lucide-react@0.263.1/dist/umd/lucide-react.js"><\/script>');</script>
+
+<script src="https://unpkg.com/lucide@0.462.0/dist/umd/lucide.js"></script>
+<script>window.lucide || document.write('<script src="https://cdn.jsdelivr.net/npm/lucide@0.462.0/dist/umd/lucide.js"><\/script>');</script>
+
+<script src="https://unpkg.com/lz-string@1.5.0/libs/lz-string.min.js"></script>
+<script>window.LZString || document.write('<script src="https://cdn.jsdelivr.net/npm/lz-string@1.5.0/libs/lz-string.min.js"><\/script>');</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>window.JSZip || document.write('<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"><\/script>');</script>
+
+<style>
+  :root { color-scheme: dark; }
+  html, body, #root { height: 100%; }
+  body { margin: 0; background: #020617; overflow: hidden; }
+  * { -webkit-tap-highlight-color: transparent; }
+  ::selection { background: rgba(34, 211, 238, .28); color: #ecfeff; }
+
+  .nx-scroll { scrollbar-width: thin; scrollbar-color: #1e293b transparent; }
+  .nx-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+  .nx-scroll::-webkit-scrollbar-track { background: rgba(2, 6, 23, .5); }
+  .nx-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 999px; border: 2px solid rgba(2, 6, 23, .7); }
+  .nx-scroll::-webkit-scrollbar-thumb:hover { background: #334155; }
+
+  .nx-grid-bg {
+    background-image:
+      linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px);
+    background-size: 44px 44px;
+  }
+  .nx-radial { background: radial-gradient(900px 420px at 12% -8%, rgba(34, 211, 238, .12), transparent 60%), radial-gradient(760px 420px at 96% 4%, rgba(139, 92, 246, .12), transparent 62%); }
+  .nx-glow { box-shadow: 0 0 0 1px rgba(34, 211, 238, .22), 0 18px 60px -22px rgba(34, 211, 238, .45); }
+  .nx-inset { box-shadow: inset 0 1px 0 0 rgba(148, 163, 184, .06); }
+
+  textarea.nx-editor { font-variant-ligatures: none; tab-size: 2; caret-color: #22d3ee; }
+  textarea.nx-editor::placeholder { color: #475569; }
+  .nx-gutter { font-variant-ligatures: none; user-select: none; }
+
+  .nx-spin { animation: nx-spin .85s linear infinite; }
+  @keyframes nx-spin { to { transform: rotate(360deg); } }
+
+  .nx-shimmer-text {
+    background: linear-gradient(90deg, #64748b 0%, #e2e8f0 50%, #64748b 100%);
+    background-size: 200% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .nx-scanline::after {
+    content: ''; position: absolute; left: 0; right: 0; height: 22%;
+    background: linear-gradient(180deg, transparent, rgba(34, 211, 238, .16), transparent);
+    animation: scan 3.6s linear infinite; pointer-events: none;
+  }
+  .nx-noselect { user-select: none; }
+  input[type="text"].nx-field:focus, textarea.nx-field:focus { outline: none; }
+</style>
+</head>
+<body class="font-sans antialiased text-slate-200 bg-slate-950">
+<div id="root">
+  <div style="height:100%;display:grid;place-items:center;color:#64748b;font-family:ui-sans-serif,system-ui,sans-serif">
+    <div style="text-align:center">
+      <div style="font-size:38px">🚀</div>
+      <div style="margin-top:10px;font-size:13px;letter-spacing:.18em;text-transform:uppercase">Booting NEXUS IDE</div>
+    </div>
+  </div>
+</div>
+<noscript>
+  <div style="padding:40px;font-family:system-ui;color:#e2e8f0;background:#020617;height:100vh">
+    <h1 style="color:#22d3ee">JavaScript required</h1>
+    <p>NEXUS IDE is a fully client-side application. Enable JavaScript to run the studio and the Browser Tunnel.</p>
+  </div>
+</noscript>
+
+<script type="text/babel" data-presets="react">
 /* ═══════════════════════════════════════════════════════════════════════════
    NEXUS IDE — CORE RUNTIME
    Storage, templates, document assembly, UI atoms, error traps, SW bridge.
